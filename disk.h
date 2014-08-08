@@ -3,7 +3,7 @@
  * Project 2 Starter Code
  * (c) 2013 Alan Mislove
  *
- * This file is the header file for the virual disk.
+ * This file is the header file for the virtual disk.
  * You **SHOULD NOT** touch anything in this file.
  */
 

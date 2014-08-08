@@ -3,7 +3,7 @@
  * Project 2 Starter Code
  * (c) 2013 Alan Mislove
  *
- * This file is the file for reading/writing the virual disk.
+ * This file is the file for reading/writing the virtual disk.
  * You **SHOULD NOT** touch anything in this file.
  */
 
