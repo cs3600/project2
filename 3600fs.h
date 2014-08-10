@@ -82,7 +82,7 @@ typedef struct direntry_t {
   blocknum block;
 } direntry; // TODO make size 512 bytes
 
-// Represents a file inode block (INODE). This entry contains file 
+// Represents a file inode block (INODE). This block contains file 
 // metadata (timestamps, owner, mode) as well as pointers to the
 // DB blocks that actually contain the data in the file.
 typedef struct inode_t {
@@ -109,5 +109,9 @@ typedef struct inode_t {
   blocknum double_indirect;
 } inode;
 
+// Represents a data block (DB). These blocks contains only user data.
+typedef struct db_t {
+  char data[512];
+} db;
 
 #endif
