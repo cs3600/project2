@@ -63,7 +63,15 @@ typedef struct dnode_t {
   // Pointer to an INDIRECT block that has pointers to INDIRECT blocks
   // that have pointers to DIRENT blocks (..?)
   blocknum double_indirect;
-} dnode;
+} dnode; // TODO check is struct size 512 bytes?
+
+// Represents an indirect block (INDIRECT). Indirect blocks are simply 
+// blocks that store more blocknum pointers to either DIRENT blocks, or
+// other INDIRECT blocks. 
+typedef struct indirect_t {
+blocknum blocks[128];
+} indirect;
+
 
 
 #endif
