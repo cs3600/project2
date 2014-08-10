@@ -58,10 +58,10 @@ typedef struct dnode_t {
   struct timespec create_time;
   // The locations of the directory entry blocks
   blocknum direct[...];
-  // Pointer to an INDIRECT block that has pointers to DIRENT blocks (.?)
+  // Pointer to an INDIRECT block that has pointers to DIRENT blocks
   blocknum single_indirect;
   // Pointer to an INDIRECT block that has pointers to INDIRECT blocks
-  // that have pointers to DIRENT blocks (..?)
+  // that have pointers to DIRENT blocks
   blocknum double_indirect;
 } dnode; // TODO make size 512 bytes
 
@@ -82,6 +82,32 @@ typedef struct direntry_t {
   blocknum block;
 } direntry; // TODO make size 512 bytes
 
+// Represents a file inode block (INODE). This entry contains file 
+// metadata (timestamps, owner, mode) as well as pointers to the
+// DB blocks that actually contain the data in the file.
+typedef struct inode_t {
+  // The number of entries in the file 
+  unsigned int size;
+  // The user id of who owns the file
+  uid_t user;
+  // The group id of who owns the file
+  gid_t group;
+  // The permissions associated with the file
+  mode_t mode;
+  // The time the file was last accessed
+  struct timespec access_time;
+  // The time the file was last modified
+  struct timespec modify_time;
+  // The time the file was created
+  struct timespec create_time;
+  // The locations of the data blocks
+  blocknum direct[...];
+  // Pointer to an INDIRECT block that has pointers to DB blocks
+  blocknum single_indirect;
+  // Pointer to an INDIRECT block that has pointers to INDIRECT blocks
+  // that have pointers to DB blocks
+  blocknum double_indirect;
+} inode;
 
 
 #endif
