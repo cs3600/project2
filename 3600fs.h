@@ -63,14 +63,24 @@ typedef struct dnode_t {
   // Pointer to an INDIRECT block that has pointers to INDIRECT blocks
   // that have pointers to DIRENT blocks (..?)
   blocknum double_indirect;
-} dnode; // TODO check is struct size 512 bytes?
+} dnode; // TODO make size 512 bytes
 
 // Represents an indirect block (INDIRECT). Indirect blocks are simply 
 // blocks that store more blocknum pointers to either DIRENT blocks, or
 // other INDIRECT blocks. 
 typedef struct indirect_t {
-blocknum blocks[128];
+  blocknum blocks[128];
 } indirect;
+
+// Represents directory entry blocks (DIRENT). Directory entry blocks
+// contain the contents of directories. These entries are statically
+// allocated, so they must have a valid bit.
+typedef struct direntry_t {
+  char name[...];
+  char type;
+  // The block number (block.valid is the valid bit)
+  blocknum block;
+} direntry; // TODO make size 512 bytes
 
 
 
