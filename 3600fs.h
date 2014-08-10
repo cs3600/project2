@@ -114,4 +114,11 @@ typedef struct db_t {
   char data[512];
 } db;
 
+// Represents a free block (FREE). Contains a pointer to the next
+// free block.
+typedef struct free_t {
+blocknum next;
+char junk[508];
+} free;
+
 #endif
