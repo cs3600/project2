@@ -13,6 +13,9 @@
   structure definitions assume a blocksize of 512 bytes.
 */
 
+// Magic number for the disk formatting
+extern const int MAGICNUMBER;
+
 // Represents block pointers. 
 // Many of these pointers will be statically allocated, and therefore
 // many of them will be invalid when they are first created.

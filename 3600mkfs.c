@@ -29,6 +29,36 @@ void myformat(int size) {
            STRUCTURES TO THEIR INITIAL VALUE, AS YOU ARE FORMATTING
            A BLANK DISK.  YOUR DISK SHOULD BE size BLOCKS IN SIZE. */
 
+  //*********** Probably want to put this all in a helper function ************
+  // TODO: Create structure for our disk size * BLOCKSIZE
+
+  // TODO: Create VCB, assign to Block 0
+  blocknum vcbRoot = { .block = 1, .valid = 1 };
+  blocknum vcbFree = { .block = 3, .valid = 1 };
+
+  vcb vcbBlock = { .magic = MAGICNUMBER, .blocksize = BLOCKSIZE, 
+    .root = vcbRoot, .free = vcbFree, .name = "Nonsense" };
+
+  char tmp[BLOCKSIZE];
+  memset(tmp, 0, BLOCKSIZE);
+  memcpy(tmp, &vcbBlock, sizeof(vcb));
+
+  dwrite(0, tmp);
+
+  
+  // TODO: Create DNODE, assign to Block 1
+  blocknum singleIndDNODE = { .block = 1, .valid = 0 };
+  blocknum doubleIndDNODE = { .block = 1, .valid = 0 };
+
+  // TODO: Iterate thorugh direct[] and assign invalid for eveything but 0
+  blocknum directDNODE[];
+
+  // TODO: Create DIRENT, assign to Block 2
+
+  /* TODO: Assign rest of blocks as FREE, have their next point to next block;
+           the last block's next should be invalid */         
+
+
   /* 3600: AN EXAMPLE OF READING/WRITING TO THE DISK IS BELOW - YOU'LL
            WANT TO REPLACE THE CODE BELOW WITH SOMETHING MEANINGFUL. */
 

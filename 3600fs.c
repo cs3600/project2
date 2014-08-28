@@ -38,6 +38,8 @@
 #include "3600fs.h"
 #include "disk.h"
 
+const int MAGICNUMBER = 42;
+
 /*
  * Initialize filesystem. Read in file system metadata and initialize
  * memory structures. If there are inconsistencies, now would also be
