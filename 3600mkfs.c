@@ -24,7 +24,9 @@
 #include "disk.h"
 
 const int MAGICNUMBER = 42;
-//int clock_gettime(clockid_t, struct timespec *);
+int createVcb();
+int createDnode();
+int createDirent();
 
 void myformat(int size) {
   // Do not touch or move this function
@@ -45,76 +47,91 @@ void myformat(int size) {
   for (int i = 0; i < size; i++) 
     if (dwrite(i, tmpArr) < 0) 
       perror("Error while writing to disk");
-  //*********** Probably want to put this all in a helper function ************
-  // TODO: Create structure for our disk size * BLOCKSIZE
 
-  // TODO: Create VCB, assign to Block 0
+  //*********** Probably want to put this all in a helper function ************
+  // create the Vcb and write to Block 0
+  createVcb();
+
+  // Create the first Dnode and wirte to Block 1
+  createDnode();
+
+  // Dirent that contains "." and "..", create and assign to Block 2
+  createDirent();
+
+  // Do not touch or move this function
+  dunconnect();
+}
+
+
+// Create VCB, assign to Block 0
+int createVcb() {
+  // Root blockNum
   blocknum vcbRoot = { .block = 1, .valid = 1};
 
   // Create the first free block (WHAT DOES VALID REFER TOO)
   blocknum vcbFree = { .block = 3, .valid = 1};
 
-
+  // Assign the proper variables to the vcbBlock
   vcb vcbBlock = { .magic = MAGICNUMBER, .blocksize = BLOCKSIZE, 
     .root = vcbRoot, .free = vcbFree, .name = "Nonsense" };
 
+  // Allocate approrpriate memory and copy over
   char tmp[BLOCKSIZE];
   memset(tmp, 0, BLOCKSIZE);
   memcpy(tmp, &vcbBlock, sizeof(vcb));
 
+  // Write to block 0
   dwrite(0, tmp);
+}
 
-  // Create the first Dnode
+// Create original Dnode, assign to Block 1
+int createDnode() {
+  // Make struct
   dnode firDnode;
-  firDnode.user = getuid();
-  firDnode.group = getgid();
-  firDnode.mode = (mode_t) 0777;
-  if (clock_gettime(CLOCK_REALTIME, &(firDnode.access_time)) == 0) 
-  {
-    printf("This worked!\n"); 
-  }
-  firDnode.direct[0].block = 2;
-  firDnode.direct[0].valid = 1; 
-  firDnode.single_indirect.valid = 0;
-  firDnode.double_indirect.valid = 0; 
+  firDnode.user = getuid();			   // user's id
+  firDnode.group = getgid();           // user's group
+  firDnode.mode = (mode_t) 0777;       // set mode
+  clock_gettime(CLOCK_REALTIME, &(firDnode.access_time));  // access time
+  firDnode.direct[0].block = 2;        // assign first dirent to block 2
+  firDnode.direct[0].valid = 1;        // make it valid
+  firDnode.single_indirect.valid = 0;  // invalid
+  firDnode.double_indirect.valid = 0;  // invalid
   
-
+  // Allocate appropriate memory
   char tmpDnode[BLOCKSIZE];
   memset(tmpDnode, 0, BLOCKSIZE);
   memcpy(tmpDnode, &firDnode, sizeof(dnode));
 
+  // Write to block 1
   dwrite(1, tmpDnode);
 
+}
+
+// Create original Dirent, assign to Block 2
+int createDirent() {
   // Dirent that contains "." and ".."
   dirent dir;
 
+  // set the "." and ".." values to true and point to block 1
   blocknum curBlock = { .block = 1, .valid = 1};
   blocknum parBlock = { .block = 1, .valid = 1};
 
   // TODO: Where do these live?
-  direntry current = { .name = ".", .type = '1', .block = curBlock};   // "." type 1 is dir
+  // type 1 refers to directory
+  direntry current = { .name = ".", .type = '1', .block = curBlock};   // "."
   direntry parent = { .name = "..", .type = '1', .block = parBlock};   // ".."
 
-
+  // set entries
   dir.entries[0] = current;
   dir.entries[1] = parent;
   
+  // Allocate space for Dirent
   char tmpDirent[BLOCKSIZE];
   memset(tmpDirent, 0, BLOCKSIZE);
   memcpy(tmpDirent, &dir, sizeof(dirent));
 
+  // Write to block 2
   dwrite(2, tmpDirent);
-
-  /* TODO: Assign rest of blocks as FREE, have their next point to next block;
-           the last block's next should be invalid */         
-
-
-
-
-  // voila! we now have a disk containing all zeros
-
-  // Do not touch or move this function
-  dunconnect();
 }
 
 int main(int argc, char** argv) {
