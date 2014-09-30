@@ -44,6 +44,7 @@ void myformat(int size) {
   memset(tmpArr, 0, BLOCKSIZE);
 
   // now, write that to every block
+  // TODO: Do something with allocating free blocks here?
   for (int i = 0; i < size; i++) 
     if (dwrite(i, tmpArr) < 0) 
       perror("Error while writing to disk");
