@@ -24,9 +24,11 @@
 #include "disk.h"
 
 const int MAGICNUMBER = 42;
+int createFree(int blockNum, int lastBoolean);
 int createVcb();
 int createDnode();
 int createDirent();
+
 
 void myformat(int size) {
   // Do not touch or move this function
@@ -43,13 +45,26 @@ void myformat(int size) {
   char *tmpArr = (char *) malloc(BLOCKSIZE);
   memset(tmpArr, 0, BLOCKSIZE);
 
-  // now, write that to every block
-  // TODO: Do something with allocating free blocks here?
-  for (int i = 0; i < size; i++) 
-    if (dwrite(i, tmpArr) < 0) 
+  // Allocate memory for every block, set up blockNums 2 and greater to free
+  for (int i = 0; i < size; i++) { 
+    if (dwrite(i, tmpArr) < 0) {
       perror("Error while writing to disk");
+    }
+    // Assign free blocks from Block 3 -> n - 1
+    else if ((i > 2) && (i < (size - 1))) {
+      // Create a free for a non-last block (0 == false)
+      createFree(i, 0);
+    }
+    // Assign the last block as invalid
+    else if (i == (size - 1) && (i > 2)) {
+      // Create a free for the last block (1 == true)
+      createFree(i, 1);
+    } 
+    // do nothing
+    else {}
 
-  //*********** Probably want to put this all in a helper function ************
+  }
+
   // create the Vcb and write to Block 0
   createVcb();
 
@@ -63,6 +78,29 @@ void myformat(int size) {
   dunconnect();
 }
 
+// Create a free block at the given blockNum and point to the next, if not last
+// TODO: Error Handling here
+int createFree(int blockNum, int lastBoolean) {
+
+  // Set it to point to next in cronoligical order, and valid
+  blocknum temp = { .block = (blockNum + 1), .valid = 1 };
+  freeB tFree;
+  tFree.next = temp;
+  
+  // If it is the last block, make it invalid
+  if (lastBoolean) {
+    temp.valid = 0;
+  }  
+    
+  char tmpFree[BLOCKSIZE];
+  memset(tmpFree, 0, BLOCKSIZE);
+  memcpy(tmpFree, &tFree, sizeof(freeB));
+  
+  // Write to the block     
+  dwrite(blockNum, tmpFree);
+
+  return 0;
+}
 
 // Create VCB, assign to Block 0
 int createVcb() {
@@ -83,6 +121,8 @@ int createVcb() {
 
   // Write to block 0
   dwrite(0, tmp);
+ 
+  return 0;
 }
 
 // Create original Dnode, assign to Block 1
@@ -105,6 +145,8 @@ int createDnode() {
 
   // Write to block 1
   dwrite(1, tmpDnode);
+  
+  return 0;
 
 }
 
@@ -133,6 +175,8 @@ int createDirent() {
 
   // Write to block 2
   dwrite(2, tmpDirent);
+
+  return 0;
 }
 
 int main(int argc, char** argv) {

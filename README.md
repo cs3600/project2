@@ -13,5 +13,12 @@ Objects
 
 
 3600mkfs
-  - Figure out what to do for free blocks
 
+
+3600fs (Milestone 2)
+  - vfs_mount
+  - vfs_create
+  - vfs_delete
+  - vfs_readdir
+  - vfs_getattr
+  - Creat and rea FCBs
