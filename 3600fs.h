@@ -13,12 +13,15 @@
   structure definitions assume a blocksize of 512 bytes.
 */
 
+// Magic number for the disk formatting
+extern const int MAGICNUMBER;
+
 // Represents block pointers. 
 // Many of these pointers will be statically allocated, and therefore
 // many of them will be invalid when they are first created.
 typedef struct blocknum_t {
   int block:31;
-  int valid:1;
+  unsigned int valid:1;
 } blocknum;
 
 // Represents a volume control block (VCB). This is the first block in
@@ -57,7 +60,8 @@ typedef struct dnode_t {
   // The time the directory was created
   struct timespec create_time;
   // The locations of the directory entry blocks
-  blocknum direct[...];
+  // TODO: Find the actual amoun this should be
+  blocknum direct[20];
   // Pointer to an INDIRECT block that has pointers to DIRENT blocks
   blocknum single_indirect;
   // Pointer to an INDIRECT block that has pointers to INDIRECT blocks
@@ -77,7 +81,7 @@ typedef struct indirect_t {
 // allocated, so they must have a valid bit.  This is a single
 // directory entry
 typedef struct direntry_t {
-  char name[...];
+  char name[56];
   char type;
   // The block number (block.valid is the valid bit)
   blocknum block;
@@ -86,7 +90,7 @@ typedef struct direntry_t {
 // Represents a DIRENT block, which consists of an array of direntrys
 typedef struct dirent_t {
   // The contents of this directory
-  direntry entries[...]; // TODO: Determine size of this array
+  direntry entries[128]; // TODO: Determine size of this array
 } dirent;  // TODO: Make size 512 bytes
 
 // Represents a file inode block (INODE). This block contains file 
@@ -108,7 +112,7 @@ typedef struct inode_t {
   // The time the file was created
   struct timespec create_time;
   // The locations of the data blocks
-  blocknum direct[...];
+  blocknum direct[20];
   // Pointer to an INDIRECT block that has pointers to DB blocks
   blocknum single_indirect;
   // Pointer to an INDIRECT block that has pointers to INDIRECT blocks
@@ -126,6 +130,6 @@ typedef struct db_t {
 typedef struct free_t {
 blocknum next;
 char junk[508];
-} free;
+} freeB;
 
 #endif
