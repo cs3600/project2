@@ -81,7 +81,7 @@ typedef struct indirect_t {
 // allocated, so they must have a valid bit.  This is a single
 // directory entry
 typedef struct direntry_t {
-  char name[56];
+  char name[27];
   char type;
   // The block number (block.valid is the valid bit)
   blocknum block;
@@ -90,7 +90,7 @@ typedef struct direntry_t {
 // Represents a DIRENT block, which consists of an array of direntrys
 typedef struct dirent_t {
   // The contents of this directory
-  direntry entries[128]; // TODO: Determine size of this array
+  direntry entries[16]; // TODO: Determine size of this array
 } dirent;  // TODO: Make size 512 bytes
 
 // Represents a file inode block (INODE). This block contains file 
@@ -131,5 +131,15 @@ typedef struct free_t {
 blocknum next;
 char junk[508];
 } freeB;
+
+
+// TODO 
+void check_dirent(blocknum b, char *buf, const char *path);
+
+// TODO
+void check_single_indirect_dirent(blocknum b, char *buf, const char *path);
+
+// TODO
+void check_double_indirect_dirent(blocknum b, char *buf, const char *path);
 
 #endif

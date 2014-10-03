@@ -38,7 +38,7 @@
 #include "3600fs.h"
 #include "disk.h"
 
-const int MAGICNUMBER = 42;
+const int MAGICNUMBER = 184901;
 
 /*
  * Initialize filesystem. Read in file system metadata and initialize
@@ -57,6 +57,24 @@ static void* vfs_mount(struct fuse_conn_info *conn) {
 
   /* 3600: YOU SHOULD ADD CODE HERE TO CHECK THE CONSISTENCY OF YOUR DISK
            AND LOAD ANY DATA STRUCTURES INTO MEMORY */
+
+  vcb myVcb;
+
+  char *tmp = (char*) malloc(BLOCKSIZE);
+  //memcpy(tmp, &vcbBlock, sizeof(vcb));
+
+  // Write to block 0
+  dread(0, tmp);
+
+  memcpy(&myVcb, tmp, sizeof(vcb));
+
+  if (!(myVcb.magic == MAGICNUMBER)) {
+    fprintf(stdout, "WRONG FILE SYSTEM!!!!!!!!\n");
+  }
+  else {
+    fprintf(stdout, "Correct Magic Number!!\n");
+  }
+    
 
   return NULL;
 }
@@ -167,7 +185,73 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
  *
  */
 static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
+    
+    // Allocate appropriate memory 
+    char tmpBuff[BLOCKSIZE];
+    memset(tmpBuff, 0, BLOCKSIZE);
+
+    // Read Dnode
+    dread(1, tmpBuff);
+
+    // Put the read data into a Dnode struct
+    dnode firDnode;
+    memcpy(&firDnode, tmpBuff, sizeof(dnode));
+
+    // Read each block in dirent to check for this name
+    for (int i = 0; i < 20; i++) {// TODO fix hardcoded values
+       check_dirent(firDnode.direct[i], tmpBuff, path); // FIXME &tmpBuff?
+    }
+    
+    check_single_indirect_dirent(firDnode.single_indirect, tmpBuff, path); // FIXME &tmpBuff?
+    check_double_indirect_dirent(firDnode.double_indirect, tmpBuff, path); // FIXME &tmpBuff?
+
     return 0;
+
+  
+}
+
+// Check if b is a valid dirent TODO
+void check_dirent(blocknum b, char *buf, const char *path) {
+    if (b.valid) {
+        memset(buf, 0, BLOCKSIZE);
+        dread(b.block, buf);
+        dirent tmpDirent;
+        memcpy(&tmpDirent, buf, BLOCKSIZE);
+        for (int i = 0; i < 16; i++) { // TODO fix hardcoded values
+            if (tmpDirent.entries[i].block.valid) {
+                if (strcmp(path, tmpDirent.entries[i].name) == 0) {
+                    printf("ERROR: The given file exists already\n");
+                    return;
+                }
+            }
+        }
+    }
+}
+
+// Check if b is a valid gfriaeojg TODO
+void check_single_indirect_dirent(blocknum b, char *buf, const char *path) {
+    if (b.valid) {
+        memset(buf, 0, BLOCKSIZE);
+        dread(b.block, buf);
+        indirect tmpIndirect;
+        memcpy(&tmpIndirect, buf, BLOCKSIZE);
+        for (int i = 0; i < 128; i++) { // TODO fix hardcoded values
+            check_dirent(tmpIndirect.blocks[i], buf, path);
+        }
+    }
+}
+
+// Check if b is a valid gfriaeojg TODO
+void check_double_indirect_dirent(blocknum b, char *buf, const char *path) {
+    if (b.valid) {
+        memset(buf, 0, BLOCKSIZE);
+        dread(b.block, buf);
+        indirect tmpIndirect;
+        memcpy(&tmpIndirect, buf, BLOCKSIZE);
+        for (int i = 0; i < 128; i++) { // TODO fix hardcoded values
+            check_single_indirect_dirent(tmpIndirect.blocks[i], buf, path);
+        }
+    }
 }
 
 /*

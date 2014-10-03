@@ -34,3 +34,11 @@ different FUSE versions have slightly different interfaces.
 
 You will find a great deal of resources about FUSE on the Web.  Please
 use Piazza to ask questions if you're stuck.
+
+
+******************************************************************************
+Reasoning/Approach
+******************************************************************************
+We will be making an Inode file system; we chose this because it seemed
+like an interesting challenge, and it says it would be easier to implement
+recursive directories.

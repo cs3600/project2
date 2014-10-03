@@ -23,7 +23,8 @@
 #include "3600fs.h"
 #include "disk.h"
 
-const int MAGICNUMBER = 42;
+const int MAGICNUMBER = 184901;
+
 int createFree(int blockNum, int lastBoolean);
 int createVcb();
 int createDnode();
@@ -65,7 +66,7 @@ void myformat(int size) {
 
   }
 
-  // create the Vcb and write to Block 0
+  // Create the Vcb and write to Block 0
   createVcb();
 
   // Create the first Dnode and wirte to Block 1
