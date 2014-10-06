@@ -186,6 +186,7 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
  */
 static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
     
+    printf("\n\n\n\nMethod called\n\n\n\n\n");
     // Allocate appropriate memory 
     char buf[BLOCKSIZE];
     // Get the dnode
@@ -211,7 +212,7 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 
         // Look for available Direntry location to put this new file
         // Loop through Dnode -> direct
-        for (int i = 0; i < 20; i++) {// TODO fix hardcoded values
+        f/tmpor (int i = 0; i < 20; i++) {// TODO fix hardcoded values
             // TODO: Abstract this to isValid...
             // check if valid, if not get one, assign to i, call function
             if (! (thisDnode.direct[i].valid)) {
@@ -229,6 +230,7 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
             
             // SHOULD ONLY GET HERE IF IT IS VALID...
             if (create_inode_dirent(thisDnode.direct[i], this_inode, path, buf)) {
+                printf("\n\n\n\nYou created one!\n\n\n\n\n");
                 return 0;
             } 
         }
