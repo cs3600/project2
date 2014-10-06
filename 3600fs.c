@@ -212,6 +212,21 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
         // Look for available Direntry location to put this new file
         // Loop through Dnode -> direct
         for (int i = 0; i < 20; i++) {// TODO fix hardcoded values
+            // TODO: Abstract this to isValid...
+            // check if valid, if not get one, assign to i, call function
+            if (! (thisDnode.direct[i].valid)) {
+                // create a dirent for the ith block
+                // get the next free block
+                blocknum temp_free = get_free();
+                // try to create an dirent
+                if (! (create_dirent(temp_free, buf))) {
+                    // error with create_indirect
+                    return 0;
+                } 
+                // otherwise we were able to create an dirent, set that to the ith block
+                thisDnode.direct[i] = temp_free;
+            }
+            
             if (create_inode_dirent(thisDnode.direct[i], this_inode, path, buf)) {
                 return 0;
             } 
@@ -238,6 +253,22 @@ void init_inode(blocknum b, char *buf, mode_t mode, struct fuse_file_info *fi) {
     // TODO: FILL IN
 }
 
+// Initialize the given blocknum to a dirent
+// returns 0 if there is an error in doing so
+int create_dirent(blocknum b, char *buf) {
+    // make sure the given block is valid
+    if (b.valid) {
+        // put an indirect structure in the given block
+        memset(buf, 0, BLOCKSIZE);
+        dirent new_dirent;
+        memcpy(buf, &new_dirent, sizeof(dirent));
+        dwrite(b.block, buf);
+        return 1;
+    }
+    // Block was not valid, error
+    return 0;
+}
+
 // Initialize the given blocknum to an indirect
 // returns 0 if there is an error in doing so
 int create_indirect(blocknum b, char *buf) {
@@ -259,6 +290,7 @@ int create_indirect(blocknum b, char *buf) {
 // returns 0 if there are no open direntries
 int create_inode_dirent(blocknum dirent, blocknum inode, const char *path, char *buf) {
     // TODO: this is where the magic happens...
+    
     return 0;
 }
 

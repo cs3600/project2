@@ -154,6 +154,10 @@ void init_inode(blocknum b, char *buf, mode_t mode, struct fuse_file_info *fi);
 // returns 0 if there is an error in doing so
 int create_indirect(blocknum b);
 
+// Initialize the given blocknum to a dirent
+// returns 0 if there is an error in doing so
+int create_dirent(blocknum b, char *buf)
+
 // Create a file at the next open direntry in this dirent
 // returns 0 if there are no open direntries
 int create_inode_dirent(blocknum dirent, blocknum inode, const char *path, char *buf);
