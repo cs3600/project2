@@ -46,6 +46,7 @@ typedef struct vcb_t {
 // in the directory.
 typedef struct dnode_t {
   // The number of entries in the directory
+  // Use this to find where the the next open space is...
   unsigned int size;
   // The user id of who owns the directory
   uid_t user;
@@ -132,14 +133,48 @@ blocknum next;
 char junk[508];
 } freeB;
 
+// Find the blocknum of a given file
+// if it does not exist, return a blocknum that is invalid
+// Do we want to return where it lives in the DNode???
+blocknum get_file(const char *path);
 
-// TODO 
-void check_dirent(blocknum b, char *buf, const char *path);
+// TODO comment
+blocknum get_inode_dirent(blocknum b, char *buf, const char *path);
 
-// TODO
-void check_single_indirect_dirent(blocknum b, char *buf, const char *path);
+// TODO comment
+blocknum get_inode_single_indirect_dirent(blocknum b, char *buf, const char *path);
 
-// TODO
-void check_double_indirect_dirent(blocknum b, char *buf, const char *path);
+// TODO comment
+blocknum get_inode_double_indirect_dirent(blocknum b, char *buf, const char *path);
+
+// Create a file at the next open direntry in this dirent
+// returns 0 if there are no open direntries
+int create_inode_dirent(blocknum dirent, blocknum inode);
+
+// Create a file at the next open direntry in this single_indirect
+// returns 0 if there are no open direntries
+int create_inode_single_indirect_dirent(blocknum single_indirect, blocknum inode);
+
+// Create a file at the next open direntry in this double_indirect
+// returns 0 if there are no open direntries
+int create_inode_double_indirect_dirent(blocknum double_indirect, blocknum inode);
+
+// Reads the dnode at the given block number into buf
+dnode get_dnode(unsigned int b, char *buf);
+
+// Returns the next free block's blocknum
+// If no more exist, returns a blocknum that is invalid
+blocknum get_free();
+
+// Reads the vcb at the given block number into buf
+vcb get_vcb(char *buf);
+
+
+// TODO: Multiple things have these structs.. can we abstract by passing a param???
+// Access Single_indirect
+blocknum get_single_block(int loc);
+// Access Double_indirect
+blocknum get_double_block(int loc);
+
 
 #endif

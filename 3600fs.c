@@ -187,31 +187,167 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
     
     // Allocate appropriate memory 
-    char tmpBuff[BLOCKSIZE];
-    memset(tmpBuff, 0, BLOCKSIZE);
+    char buf[BLOCKSIZE];
+    // Get the dnode
+    dnode thisDnode = get_dnode(1, buf);
 
-    // Read Dnode
-    dread(1, tmpBuff);
-
-    // Put the read data into a Dnode struct
-    dnode firDnode;
-    memcpy(&firDnode, tmpBuff, sizeof(dnode));
-
-    // Read each block in dirent to check for this name
-    for (int i = 0; i < 20; i++) {// TODO fix hardcoded values
-       check_dirent(firDnode.direct[i], tmpBuff, path); // FIXME &tmpBuff?
+    blocknum file;
+    // blocknum of Inode of file
+    // TODO Must free file...
+    file = get_file(path);
+    // See if the file exists
+    if (file.valid) {
+        // File exists...
+        return -1;
     }
     
-    check_single_indirect_dirent(firDnode.single_indirect, tmpBuff, path); // FIXME &tmpBuff?
-    check_double_indirect_dirent(firDnode.double_indirect, tmpBuff, path); // FIXME &tmpBuff?
+    // Get next free block
+    blocknum this_inode = get_free();
+    
+    if (this_inode.valid) {
 
-    return 0;
+        // Look for available Direntry location to put this new file
+        // Loop through Dnode -> direct
+        for (int i = 0; i < 20; i++) {// TODO fix hardcoded values
+            if (create_inode_dirent(thisDnode.direct[i], this_inode)) {
+                return 0;
+            } 
+        }
+   
+        // Loop through Dnode -> single_indirect
+        if (create_inode_single_indirect_dirent(thisDnode.single_indirect, this_inode)) {
+            return 0;
+        }
+        // Loop through Dnode -> double_indirect
+        else if (create_inode_double_indirect_dirent(thisDnode.double_indirect, this_inode)) {
+            return 0;
+        }
+        else {  // NOTHING AVAILABLE
+            return -1;
+        }
+    }
 
-  
+    // TODO: Out of memory message
+    return -1;
 }
 
-// Check if b is a valid dirent TODO
-void check_dirent(blocknum b, char *buf, const char *path) {
+// TODO: Fill in all of these methods
+// Create a file at the next open direntry in this dirent
+// returns 0 if there are no open direntries
+int create_inode_dirent(blocknum dirent, blocknum inode) {
+    return 0;
+}
+
+// Create a file at the next open direntry in this single_indirect
+// returns 0 if there are no open direntries
+int create_inode_single_indirect_dirent(blocknum single_indirect, blocknum inode); {
+    return 0;
+}
+
+// Create a file at the next open direntry in this double_indirect
+// returns 0 if there are no open direntries
+int create_inode_double_indirect_dirent(blocknum double_indirect, blocknum inode) {
+    return 0;
+}
+
+
+// TODO put this in a logical place within the code
+vcb get_vcb(char *buf) {
+    // Allocate appropriate memory 
+    memset(buf, 0, BLOCKSIZE);
+    // Read Vcb
+    dread(0, buf);
+    // Put the read data into a Dnode struct
+    vcb thisVcb;
+    memcpy(&thisVcb, buf, sizeof(vcb));
+    return thisVcb;
+}
+
+
+// Returns the blocknum of the given path's Inode if it exists.
+// If the file does not exist, then the function returns a
+// non-valid blocknum.
+// When done with the result blocknum, be sure to call free().
+blocknum get_file(const char *path) {
+    // Start at the Dnode and search the dirent, single_indirent, and double_indirent
+
+    // general-purpose temporary buffer
+    // Free this before we return
+    char *buf = (char *) malloc(BLOCKSIZE);
+
+    // Read data into a Dnode struct
+    dnode thisDnode = get_dnode(1, buf); // TODO recursive dirs not 1
+
+    // temporary blocknum buffer
+    blocknum temp = (blocknum) malloc(sizeof(blocknum));
+
+    // Check dirent for the 'path'
+    for (int i = 0; i < 20; i++) {// TODO fix hardcoded values
+        // TODO: return blocknum, check for validity
+        temp = get_inode_dirent(thisDnode.direct[i], buf, path); // FIXME &tmpBuff?
+
+        // If valid return temp(blocknum), else keep looking
+        if (temp.valid) {
+            free(buf);
+            return temp;
+        }
+    }
+
+    temp = get_inode_single_indirect_dirent(thisDnode.single_indirect, buf, path);
+    // If valid return temp(blocknum), else keep looking
+    if (temp.valid) {
+        free(buf);
+        return temp;
+    }
+
+    temp = get_inode_double_indirect_dirent(thisDnode.double_indirect, buf, path);
+    // If valid return temp(blocknum), else file does not exist
+    if (temp.valid) {
+        free(buf);
+        return temp;
+    }
+
+    // Will only get here if we haven't found it
+    // temp blocknum is currently invalid, return that...
+    free(buf);
+    return temp;     
+}
+
+// TODO
+dnode get_dnode(unsigned int b, char *buf) {
+    // Allocate appropriate memory 
+    memset(buf, 0, BLOCKSIZE);
+    // Read Dnode
+    dread(b, buf);
+    // Put the read data into a Dnode struct
+    dnode thisDnode;
+    memcpy(&thisDnode, buf, sizeof(dnode));
+    return thisDnode;
+}
+
+// Returns the next free block's blocknum
+// If no more exist, returns a blocknum that is invalid
+blocknum get_free() {
+    // temporary buffer for Vcb
+    char buf[BLOCKSIZE];
+    vcb thisVcb = get_vcb(buf);
+
+    // Do we have a free block
+    if (vcb.free.valid) {
+        // capture free block
+        blocknum next_free = vcb.free;   
+        // Update the next free block in Vcb   
+        vcb.free = vcb.free.next;        
+        return next_free;
+    }
+
+    // return an invalid blocknum
+    return vcb.free;   
+}
+
+// Returns a blocknum to the file's Inode, if it exists in the 
+// dirent specified by b.
+blocknum get_inode_dirent(blocknum b, char *buf, const char *path) {
     if (b.valid) {
         memset(buf, 0, BLOCKSIZE);
         dread(b.block, buf);
@@ -220,40 +356,80 @@ void check_dirent(blocknum b, char *buf, const char *path) {
         for (int i = 0; i < 16; i++) { // TODO fix hardcoded values
             if (tmpDirent.entries[i].block.valid) {
                 if (strcmp(path, tmpDirent.entries[i].name) == 0) {
-                    printf("ERROR: The given file exists already\n");
-                    return;
+                    printf("The given file exists already\n");
+                    // return the blocknum where this file lives
+                    return tmpDirent.entries[i].block;
                 }
             }
         }
     }
+
+    // return a blocknum that is not valid (did not find file)
+    blocknum inval;
+    inval.valid = 0;
+    return inval;
 }
 
-// Check if b is a valid gfriaeojg TODO
-void check_single_indirect_dirent(blocknum b, char *buf, const char *path) {
+// Check every entry of a single indirect of dirents. If the file path exists
+// in any of the dirents, return the blocknum to that file's Inode.
+blocknum get_inode_single_indirect_dirent(blocknum b, char *buf, const char *path) {
+    blocknum temp;
     if (b.valid) {
         memset(buf, 0, BLOCKSIZE);
         dread(b.block, buf);
-        indirect tmpIndirect;
-        memcpy(&tmpIndirect, buf, BLOCKSIZE);
+        indirect single_indirect;
+        memcpy(&single_indirect, buf, BLOCKSIZE);
         for (int i = 0; i < 128; i++) { // TODO fix hardcoded values
-            check_dirent(tmpIndirect.blocks[i], buf, path);
+            temp = get_inode_dirent(single_indirect.blocks[i], buf, path);
+            // will only be valid if file found, that is returned blocknum
+            if (temp.valid) {
+                return temp;
+            }
         }
     }
+    
+    // return a blocknum that is not valid (did not find file)
+    temp.valid = 0;
+    return temp;
+
 }
 
-// Check if b is a valid gfriaeojg TODO
-void check_double_indirect_dirent(blocknum b, char *buf, const char *path) {
+// Checks every indirect of a double indirect of dirents. For each indirect,
+// check every entry of a single indirect of dirents. If the file path exists
+// in any of the dirents, return the blocknum to that file's Inode.
+blocknum get_inode_double_indirect_dirent(blocknum b, char *buf, const char *path) {
+    blocknum temp;
     if (b.valid) {
         memset(buf, 0, BLOCKSIZE);
         dread(b.block, buf);
-        indirect tmpIndirect;
-        memcpy(&tmpIndirect, buf, BLOCKSIZE);
+        indirect double_indirect;
+        memcpy(&double_indirect, buf, BLOCKSIZE);
         for (int i = 0; i < 128; i++) { // TODO fix hardcoded values
-            check_single_indirect_dirent(tmpIndirect.blocks[i], buf, path);
+            temp = get_inode_single_indirect_dirent(double_indirect.blocks[i], buf, path);
+            // will only be valid if file found, that is returned blocknum
+            if (temp.valid) {
+                return temp;
+            }
         }
     }
+
+    // return a blocknum that is not valid (did not find file)
+    temp.valid = 0;
+    return temp;
 }
 
+// TODO: Multiple things have these structs.. can we abstract by passing a param???
+// Access Single_indirect
+blocknum get_single_block(int loc) {
+    // mod by 128 for single index
+    // divide by 128 for index in direct
+}
+// Access Double_indirect
+blocknum get_double_block(int loc) {
+    // mod by 128 for index in double single index
+    // call get_single with loc/128
+    
+}
 /*
  * The function vfs_read provides the ability to read data from 
  * an absolute path 'path,' which should specify an existing file.
@@ -304,7 +480,9 @@ static int vfs_delete(const char *path)
 
   /* 3600: NOTE THAT THE BLOCKS CORRESPONDING TO THE FILE SHOULD BE MARKED
            AS FREE, AND YOU SHOULD MAKE THEM AVAILABLE TO BE USED WITH OTHER FILES */
-
+	// check if the file exists
+	// free DB blocks, free INode, free Dnode/dirent --> double check this is how FUSE works
+   
     return 0;
 }
 
@@ -317,7 +495,7 @@ static int vfs_delete(const char *path)
  */
 static int vfs_rename(const char *from, const char *to)
 {
-
+	// get_file -> then rename...
     return 0;
 }
 
@@ -333,7 +511,7 @@ static int vfs_rename(const char *from, const char *to)
  */
 static int vfs_chmod(const char *file, mode_t mode)
 {
-
+	// get_file -> reassign
     return 0;
 }
 
@@ -344,7 +522,7 @@ static int vfs_chmod(const char *file, mode_t mode)
  */
 static int vfs_chown(const char *file, uid_t uid, gid_t gid)
 {
-
+	// get file -> reassign
     return 0;
 }
 

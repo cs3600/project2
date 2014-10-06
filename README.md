@@ -10,7 +10,8 @@ Objects
   - Get definite size
   - Double check size
   - How should we handle "type" in DIRENT
-
+  - Change pointers with stars to & in method signatures
+  - Limit line length
 
 3600mkfs
 
@@ -21,4 +22,4 @@ Objects
   - vfs_delete
   - vfs_readdir
   - vfs_getattr
-  - Creat and rea FCBs
+  - Create and read FCBs
