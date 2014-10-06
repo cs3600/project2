@@ -227,6 +227,7 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
                 thisDnode.direct[i] = temp_free;
             }
             
+            // SHOULD ONLY GET HERE IF IT IS VALID...
             if (create_inode_dirent(thisDnode.direct[i], this_inode, path, buf)) {
                 return 0;
             } 
@@ -288,20 +289,49 @@ int create_indirect(blocknum b, char *buf) {
 // TODO: Fill in all of these methods
 // Create a file at the next open direntry in this dirent
 // returns 0 if there are no open direntries
-int create_inode_dirent(blocknum dirent, blocknum inode, const char *path, char *buf) {
+int create_inode_dirent(blocknum d, blocknum inode, const char *path, char *buf) {
     // TODO: this is where the magic happens...
+    // this must now be valid
+    d.valid = 1;
+
+    // get the dirent object
+    memset(buf, 0, BLOCKSIZE);
+    dread(d.block, buf);
+    dirent dir;
+    memcpy(&dir, buf, BLOCKSIZE);
+    
+    // look through each of the direntries
+    for (int i = 0; i < 16; i++) {
+        // if valid, continue
+        if (dir.entries[i].block.valid) {
+            // Something already exists here
+            continue;
+        }
+        // otherwise add it here
+        else {
+            // set the block that lives there to the passed in inode
+            dir.entries[i].block = inode;
+            // set the name to the given path TODO: check length...
+            // TODO don't harcode...
+            strncpy(dir.entries[i].name, path, 27);
+            // set the type to a file
+            dir.entries[i].type = 0;
+            // Add worked fine
+            return 1;
+        }
+    }
     
     return 0;
 }
 
 // Create a file at the next open direntry in this single_indirect
 // returns 0 if there are no open direntries
-int create_inode_single_indirect_dirent(blocknum single_indirect, blocknum inode, const char *path, char *buf) {
+int create_inode_single_indirect_dirent(blocknum s, blocknum inode, const char *path, char *buf) {
     // All other blocks free, now this must be valid
-    single_indirect.valid = 1;
+    s.valid = 1;
 
     memset(buf, 0, BLOCKSIZE);
-    dread(b.block, buf);
+    dread(s.block, buf);
     indirect single_indirect;
     memcpy(&single_indirect, buf, BLOCKSIZE);
 
@@ -321,7 +351,7 @@ int create_inode_single_indirect_dirent(blocknum single_indirect, blocknum inode
         }
 
         // try to create a block at i
-        if (create_inode_dirent(double_indirect.blocks[i], inode, path, buf)) {
+        if (create_inode_dirent(single_indirect.blocks[i], inode, path, buf)) {
             return 1;
         }
     }
@@ -331,12 +361,12 @@ int create_inode_single_indirect_dirent(blocknum single_indirect, blocknum inode
 
 // Create a file at the next open direntry in this double_indirect
 // returns 0 if there are no open direntries
-int create_inode_double_indirect_dirent(blocknum double_indirect, blocknum inode, const char *path, char *buf) {
+int create_inode_double_indirect_dirent(blocknum d, blocknum inode, const char *path, char *buf) {
     // All other blocks free, now this must be valid
-    double_indirect.valid = 1;
+    d.valid = 1;
 
     memset(buf, 0, BLOCKSIZE);
-    dread(b.block, buf);
+    dread(d.block, buf);
     indirect double_indirect;
     memcpy(&double_indirect, buf, BLOCKSIZE);
 
@@ -393,7 +423,8 @@ blocknum get_file(const char *path) {
     dnode thisDnode = get_dnode(1, buf); // TODO recursive dirs not 1
 
     // temporary blocknum buffer
-    blocknum temp = (blocknum) malloc(sizeof(blocknum));
+    //blocknum temp = (blocknum) malloc(sizeof(blocknum));
+    blocknum temp; 
 
     // Check dirent for the 'path'
     for (int i = 0; i < 20; i++) {// TODO fix hardcoded values
@@ -447,16 +478,23 @@ blocknum get_free() {
     vcb thisVcb = get_vcb(buf);
 
     // Do we have a free block
-    if (vcb.free.valid) {
+    if (thisVcb.free.valid) {
+        // Get the free block structure
+        memset(buf, 0, BLOCKSIZE);
+        dread(thisVcb.free.block, buf);
+        freeB tmpFree;
+        memcpy(&tmpFree, buf, BLOCKSIZE);
+
         // capture free block
-        blocknum next_free = vcb.free;   
+        blocknum next_free = thisVcb.free;   
         // Update the next free block in Vcb   
-        vcb.free = vcb.free.next;        
+        thisVcb.free = tmpFree.next; 
+       
         return next_free;
     }
 
     // return an invalid blocknum
-    return vcb.free;   
+    return thisVcb.free;   
 }
 
 // Returns a blocknum to the file's Inode, if it exists in the 
