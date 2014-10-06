@@ -147,17 +147,24 @@ blocknum get_inode_single_indirect_dirent(blocknum b, char *buf, const char *pat
 // TODO comment
 blocknum get_inode_double_indirect_dirent(blocknum b, char *buf, const char *path);
 
+// Initialize inode metadata to the given inode blocknum
+void init_inode(blocknum b, char *buf, mode_t mode, struct fuse_file_info *fi);
+
+// Initialize the given blocknum to an indirect
+// returns 0 if there is an error in doing so
+int create_indirect(blocknum b);
+
 // Create a file at the next open direntry in this dirent
 // returns 0 if there are no open direntries
-int create_inode_dirent(blocknum dirent, blocknum inode);
+int create_inode_dirent(blocknum dirent, blocknum inode, const char *path, char *buf);
 
 // Create a file at the next open direntry in this single_indirect
 // returns 0 if there are no open direntries
-int create_inode_single_indirect_dirent(blocknum single_indirect, blocknum inode);
+int create_inode_single_indirect_dirent(blocknum single_indirect, blocknum inode, const char *path, char *buf);
 
 // Create a file at the next open direntry in this double_indirect
 // returns 0 if there are no open direntries
-int create_inode_double_indirect_dirent(blocknum double_indirect, blocknum inode);
+int create_inode_double_indirect_dirent(blocknum double_indirect, blocknum inode, const char *path, char *buf);
 
 // Reads the dnode at the given block number into buf
 dnode get_dnode(unsigned int b, char *buf);

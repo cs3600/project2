@@ -12,6 +12,7 @@ Objects
   - How should we handle "type" in DIRENT
   - Change pointers with stars to & in method signatures
   - Limit line length
+  - Do not malloc buf, change those that do
 
 3600mkfs
 
