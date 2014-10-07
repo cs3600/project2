@@ -14,7 +14,7 @@ Objects
   - Limit line length; line length = 80
   - Do not malloc buf, change those that do
   - Make sure tab indentation is consistent; indent = 4 spaces
-
+  - Ensure that if conditions that are negated (!condition) work as expected (!1 != 0)
 3600mkfs
 
 
