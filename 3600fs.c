@@ -222,7 +222,7 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
                 // try to create an dirent
                 if (! (create_dirent(temp_free, buf))) {
                     // error with create_indirect
-                    return 0;
+                    return -1;
                 } 
                 // otherwise we were able to create an dirent, set that to the ith block
                 thisDnode.direct[i] = temp_free;
@@ -231,16 +231,25 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
             // SHOULD ONLY GET HERE IF IT IS VALID...
             if (create_inode_dirent(thisDnode.direct[i], this_inode, path, buf)) {
                 printf("\n\n\n\nYou created one!\n\n\n\n\n");
+					      memset(buf, 0, BLOCKSIZE);
+                memcpy(buf, &thisDnode, sizeof(dnode));
+                dwrite(1, buf);			
                 return 0;
             } 
         }
    
         // Loop through Dnode -> single_indirect
         if (create_inode_single_indirect_dirent(thisDnode.single_indirect, this_inode, path, buf)) {
+            memset(buf, 0, BLOCKSIZE);
+            memcpy(buf, &thisDnode, sizeof(dnode));
+            dwrite(1, buf);
             return 0;
         }
         // Loop through Dnode -> double_indirect
         else if (create_inode_double_indirect_dirent(thisDnode.double_indirect, this_inode, path, buf)) {
+            memset(buf, 0, BLOCKSIZE);
+            memcpy(buf, &thisDnode, sizeof(dnode));
+            dwrite(1, buf);
             return 0;
         }
         else {  // NOTHING AVAILABLE
