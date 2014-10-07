@@ -210,22 +210,23 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
         // Set up Inode
         init_inode(this_inode, buf, mode, fi); 
 
-        // Look for available Direntry location to put this new file
-        // Loop through Dnode -> direct
+        // Look for available direntry location to put this new file
+        // Loop through dnode -> direct
         for (int i = 0; i < 20; i++) {// TODO fix hardcoded values
             // TODO: Abstract this to isValid...
             // check if valid, if not get one, assign to i, call function
-            if (! (thisDnode.direct[i].valid)) {
+            if (!(thisDnode.direct[i].valid)) {
                 // create a dirent for the ith block
                 // get the next free block
                 blocknum temp_free = get_free();
-                // try to create an dirent
-                if (! (create_dirent(temp_free, buf))) {
+                // try to create a dirent
+                if (!(create_dirent(temp_free, buf))) {
                     // error with create_indirect
                     return -1;
                 } 
-                // otherwise we were able to create an dirent, set that to the ith block
+                // otherwise we were able to create a dirent, set that to the ith block
                 thisDnode.direct[i] = temp_free;
+
             }
             
             // SHOULD ONLY GET HERE IF IT IS VALID...
@@ -238,14 +239,14 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
             } 
         }
    
-        // Loop through Dnode -> single_indirect
+        // Loop through dnode -> single_indirect
         if (create_inode_single_indirect_dirent(thisDnode.single_indirect, this_inode, path, buf)) {
             memset(buf, 0, BLOCKSIZE);
             memcpy(buf, &thisDnode, sizeof(dnode));
             dwrite(1, buf);
             return 0;
         }
-        // Loop through Dnode -> double_indirect
+        // Loop through dnode -> double_indirect
         else if (create_inode_double_indirect_dirent(thisDnode.double_indirect, this_inode, path, buf)) {
             memset(buf, 0, BLOCKSIZE);
             memcpy(buf, &thisDnode, sizeof(dnode));
@@ -262,7 +263,6 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 }
 // Initialize inode metadata to the given inode blocknum
 void init_inode(blocknum b, char *buf, mode_t mode, struct fuse_file_info *fi) {
-    // TODO: FILL IN
 }
 
 // Initialize the given blocknum to a dirent
@@ -282,7 +282,7 @@ int create_dirent(blocknum b, char *buf) {
 }
 
 // Initialize the given blocknum to an indirect
-// returns 0 if there is an error in doing so
+// returns 0 if there is an error
 int create_indirect(blocknum b, char *buf) {
     // make sure the given block is valid
     if (b.valid) {
@@ -298,32 +298,27 @@ int create_indirect(blocknum b, char *buf) {
 }
 
 // TODO: Fill in all of these methods
-// Create a file at the next open direntry in this dirent
+// Create a file at the next open direntry in the given dirent
 // returns 0 if there are no open direntries
-int create_inode_dirent(blocknum d, blocknum inode, const char *path, char *buf) {
+int create_inode_dirent(blocknum dirent, blocknum inode, const char *path, char *buf) {
     // TODO: this is where the magic happens...
     // this must now be valid
-    d.valid = 1;
+    dirent.valid = 1;
 
     // get the dirent object
     memset(buf, 0, BLOCKSIZE);
-    dread(d.block, buf);
+    dread(dirent.block, buf);
     dirent dir;
     memcpy(&dir, buf, BLOCKSIZE);
     
     // look through each of the direntries
-    for (int i = 0; i < 16; i++) {
-        // if valid, continue
-        if (dir.entries[i].block.valid) {
-            // Something already exists here
-            continue;
-        }
-        // otherwise add it here
-        else {
+    for (int i = 0; i < 16; i++) { // TODO remove hardcoded
+        // add the inode to the ith block that is not used yet
+        if (!dir.entries[i].block.valid) {
             // set the block that lives there to the passed in inode
             dir.entries[i].block = inode;
             // set the name to the given path TODO: check length...
-            // TODO don't harcode...
+            // TODO don't hardcode...
             strncpy(dir.entries[i].name, path, 27);
             // set the type to a file
             dir.entries[i].type = 0;
@@ -331,7 +326,7 @@ int create_inode_dirent(blocknum d, blocknum inode, const char *path, char *buf)
             memset(buf, 0, BLOCKSIZE);
             memcpy(buf, &dir, BLOCKSIZE);
     
-            dwrite(d.block, buf);
+            dwrite(dirent.block, buf);
             return 1;
         }
     }
