@@ -495,7 +495,12 @@ blocknum get_free() {
         blocknum next_free = thisVcb.free;   
         // Update the next free block in Vcb   
         thisVcb.free = tmpFree.next; 
-       
+    
+        // Write the adjusted vcb to disk
+				memset(buf, 0, BLOCKSIZE);
+        memcpy(buf, &thisVcb, BLOCKSIZE);
+        dwrite(0, buf);
+   
         return next_free;
     }
 
