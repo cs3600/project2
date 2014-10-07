@@ -212,7 +212,7 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 
         // Look for available Direntry location to put this new file
         // Loop through Dnode -> direct
-        f/tmpor (int i = 0; i < 20; i++) {// TODO fix hardcoded values
+        for (int i = 0; i < 20; i++) {// TODO fix hardcoded values
             // TODO: Abstract this to isValid...
             // check if valid, if not get one, assign to i, call function
             if (! (thisDnode.direct[i].valid)) {
@@ -319,6 +319,10 @@ int create_inode_dirent(blocknum d, blocknum inode, const char *path, char *buf)
             // set the type to a file
             dir.entries[i].type = 0;
             // Add worked fine
+            memset(buf, 0, BLOCKSIZE);
+            memcpy(buf, &dir, BLOCKSIZE);
+    
+            dwrite(d.block, buf);
             return 1;
         }
     }
