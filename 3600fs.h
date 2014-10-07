@@ -148,7 +148,7 @@ blocknum get_inode_single_indirect_dirent(blocknum b, char *buf, const char *pat
 blocknum get_inode_double_indirect_dirent(blocknum b, char *buf, const char *path);
 
 // Initialize inode metadata to the given inode blocknum
-void init_inode(blocknum b, char *buf, mode_t mode, struct fuse_file_info *fi);
+int init_inode(blocknum b, char *buf, mode_t mode, struct fuse_file_info *fi);
 
 // Initialize the given blocknum to an indirect
 // returns 0 if there is an error in doing so

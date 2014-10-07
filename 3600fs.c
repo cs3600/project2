@@ -30,6 +30,7 @@
 #include <errno.h>
 #include <assert.h>
 #include <sys/statfs.h>
+#include <sys/types.h>
 
 #ifdef HAVE_SETXATTR
 #include <sys/xattr.h>
@@ -207,8 +208,10 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
     
     if (this_inode.valid) {
 
-        // Set up Inode
-        init_inode(this_inode, buf, mode, fi); 
+        // Set up Inode; if not 1, the inode was not set
+        if (init_inode(this_inode, buf, mode, fi) != 1)
+        	return -1;
+
 
         // Look for available direntry location to put this new file
         // Loop through dnode -> direct
@@ -261,8 +264,40 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
     // TODO: Out of memory message
     return -1;
 }
-// Initialize inode metadata to the given inode blocknum
-void init_inode(blocknum b, char *buf, mode_t mode, struct fuse_file_info *fi) {
+// Initialize inode metadata to the given inode blocknum.
+// Returns 0 if there is block is not valid.
+int init_inode(blocknum b, char *buf, mode_t mode, struct fuse_file_info *fi) {
+    // make sure the block is valid 
+    if (b.valid) {
+    		// create new inode
+    		inode new_inode;
+    		// the file has no data yet
+    		new_inode.size = 0;
+    		// TODO the file's user is the current user?
+    		new_inode.user = getuid();
+    		// TODO the file's group is the current group?
+    		new_inode.group = getgid();
+    		// set the file's mode
+    		new_inode.mode = mode;
+    		// get the clock time and set access/modified/created
+    		clockid_t now = CLOCK_REALTIME;
+    		clock_gettime(now, &new_inode.access_time);
+    		clock_gettime(now, &new_inode.modify_time);
+    		clock_gettime(now, &new_inode.create_time);
+    		// TODO what to do with direct?
+    		
+    		// invalidate the single and double indirects
+    		new_inode.single_indirect.valid = 0;
+    		new_inode.double_indirect.valid = 0;
+
+    		// zero out the buffer and write inode to blocknum in our filesystem
+    		memset(buf, 0, BLOCKSIZE);
+    		memcpy(buf, &new_inode, sizeof(inode));
+    		dwrite(b.block,  buf);
+    		return 1;
+		}
+		// the block is not valid
+		return 0;
 }
 
 // Initialize the given blocknum to a dirent
@@ -300,14 +335,14 @@ int create_indirect(blocknum b, char *buf) {
 // TODO: Fill in all of these methods
 // Create a file at the next open direntry in the given dirent
 // returns 0 if there are no open direntries
-int create_inode_dirent(blocknum dirent, blocknum inode, const char *path, char *buf) {
+int create_inode_dirent(blocknum d, blocknum inode, const char *path, char *buf) {
     // TODO: this is where the magic happens...
     // this must now be valid
-    dirent.valid = 1;
+    d.valid = 1;
 
     // get the dirent object
     memset(buf, 0, BLOCKSIZE);
-    dread(dirent.block, buf);
+    dread(d.block, buf);
     dirent dir;
     memcpy(&dir, buf, BLOCKSIZE);
     
@@ -326,7 +361,7 @@ int create_inode_dirent(blocknum dirent, blocknum inode, const char *path, char 
             memset(buf, 0, BLOCKSIZE);
             memcpy(buf, &dir, BLOCKSIZE);
     
-            dwrite(dirent.block, buf);
+            dwrite(d.block, buf);
             return 1;
         }
     }
