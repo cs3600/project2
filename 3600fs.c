@@ -57,8 +57,8 @@ const int NUM_INDIRECT_BLOCKS = BLOCK_SIZE / sizeof(blocknum);
 static void* vfs_mount(struct fuse_conn_info *conn) {
   fprintf(stderr, "vfs_mount called\n");
 
-  /* 3600: YOU SHOULD ADD CODE HERE TO CHECK THE CONSISTENCY OF YOUR DISK
-           AND LOAD ANY DATA STRUCTURES INTO MEMORY */
+	// Do not touch or move this code; connects the disk
+  dconnect();
 
   vcb myVcb;
 
@@ -70,12 +70,13 @@ static void* vfs_mount(struct fuse_conn_info *conn) {
 
   memcpy(&myVcb, tmp, sizeof(vcb));
 
-  if (!(myVcb.magic == MAGICNUMBER)) {
+  if (myVcb.magic != MAGICNUMBER) {
     fprintf(stdout, "WRONG FILE SYSTEM!!!!!!!!\n");
-  }
+    // disconnect if its not our disk
+    dunconnect(); // TODO vfs_unmount?
+	}
   else {
-    // Do not touch or move this code; connects the disk
-    dconnect();
+
   }
     
   return NULL;
@@ -109,29 +110,61 @@ static void vfs_unmount (void *private_data) {
  */
 static int vfs_getattr(const char *path, struct stat *stbuf) {
   fprintf(stderr, "vfs_getattr called\n");
-
+  fprintf(stderr, "%s\n", path);
   // Do not mess with this code 
   stbuf->st_nlink = 1; // hard links
   stbuf->st_rdev  = 0;
   stbuf->st_blksize = BLOCKSIZE;
 
-  /* 3600: YOU MUST UNCOMMENT BELOW AND IMPLEMENT THIS CORRECTLY */
-  
-  /*
-  if (The path represents the root directory)
+  // create zeroed buffer
+  char buf[BLOCKSIZE]; 
+  memset(buf, 0, BLOCKSIZE);
+
+	// check if root
+  if (strcmp("/", path) == 0) {
     stbuf->st_mode  = 0777 | S_IFDIR;
-  else 
-    stbuf->st_mode  = <<file mode>> | S_IFREG;
 
-  stbuf->st_uid     = // file uid
-  stbuf->st_gid     = // file gid
-  stbuf->st_atime   = // access time 
-  stbuf->st_mtime   = // modify time
-  stbuf->st_ctime   = // create time
-  stbuf->st_size    = // file size
-  stbuf->st_blocks  = // file size in blocks
-    */
+		// read in dnode
+		dnode root_dnode = get_dnode(1, buf);
 
+    // update stats
+	  stbuf->st_uid     = root_dnode.user; // file uid
+	  stbuf->st_gid     = root_dnode.group; // file gid
+  	stbuf->st_atime   = root_dnode.access_time.tv_sec; // access time 
+    stbuf->st_mtime   = root_dnode.modify_time.tv_sec; // modify time
+    stbuf->st_ctime   = root_dnode.create_time.tv_sec; // create time
+	  stbuf->st_size    = root_dnode.size; // file size
+	  stbuf->st_blocks  = root_dnode.size / BLOCKSIZE; // file size in blocks
+	}
+
+	// we have a file
+  else {
+    stbuf->st_mode  = 0777 | S_IFREG;
+
+  	// get attr if exists
+  	blocknum file = get_file(path);
+ 	  if (file.valid) {
+ 	 	  fprintf(stderr, "Hi hi hi hi hi******************\n");
+
+			// read in dnode
+  		inode root_inode; 
+  		dread(file.block, buf);
+  		memcpy(buf, &root_inode, sizeof(inode));
+
+      // update stats
+  	  stbuf->st_uid     = root_inode.user; // file uid
+  	  stbuf->st_gid     = root_inode.group; // file gid
+  	  stbuf->st_atime   = root_inode.access_time.tv_sec; // access time 
+  	  stbuf->st_mtime   = root_inode.modify_time.tv_sec; // modify time
+  	  stbuf->st_ctime   = root_inode.create_time.tv_sec; // create time
+  	  stbuf->st_size    = root_inode.size; // file size
+  	  stbuf->st_blocks  = root_inode.size / BLOCKSIZE; // file size in blocks
+	  }
+
+		// otherwise something
+		else {
+		}
+	}
   return 0;
 }
 
@@ -230,10 +263,9 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
                 } 
                 // otherwise we were able to create a dirent, set that to the ith block
                 thisDnode.direct[i] = temp_free;
-
             }
             
-            // SHOULD ONLY GET HERE IF IT IS VALID...
+            // dirent is valid, look through direntries for next open slot
             if (create_inode_dirent(thisDnode.direct[i], this_inode, path, buf)) {
                 printf("\n\n\n\nYou created one!\n\n\n\n\n");
 					      memset(buf, 0, BLOCKSIZE);
@@ -309,6 +341,10 @@ int create_dirent(blocknum b, char *buf) {
         // put an indirect structure in the given block
         memset(buf, 0, BLOCKSIZE);
         dirent new_dirent;
+        // invalidate all blocks
+        for (int i = 0; i < NUM_DIRENTRIES; i++) {
+        	new_dirent.entries[i].block.valid = 0;
+				}
         memcpy(buf, &new_dirent, sizeof(dirent));
         dwrite(b.block, buf);
         return 1;
@@ -325,6 +361,10 @@ int create_indirect(blocknum b, char *buf) {
         // put an indirect structure in the given block
         memset(buf, 0, BLOCKSIZE);
         indirect new_indirect;
+        // invalidate all blocks
+        for (int i = 0; i < NUM_INDIRECT_BLOCKS; i++) {
+        	new_indirect.blocks[i].valid = 0;
+				}
         memcpy(buf, &new_indirect, sizeof(indirect));
         dwrite(b.block, buf);
         return 1;
@@ -355,14 +395,15 @@ int create_inode_dirent(blocknum d, blocknum inode, const char *path, char *buf)
             dir.entries[i].block = inode;
             // set the name to the given path TODO: check length...
             // TODO don't hardcode...
-            strncpy(dir.entries[i].name, path, 27);
+            strncpy(dir.entries[i].name, path, 27); // TODO null term?
             // set the type to a file
-            dir.entries[i].type = 0;
-            // Add worked fine
+            dir.entries[i].type = 0; // make constant TODO
+            
+            // write to dirent to disk
             memset(buf, 0, BLOCKSIZE);
             memcpy(buf, &dir, BLOCKSIZE);
-    
             dwrite(d.block, buf);
+
             return 1;
         }
     }

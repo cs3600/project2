@@ -148,7 +148,7 @@ int createVcb() {
 }
 
 // Create original Dnode, assign to Block 1
-int createDnode() {
+int createDnode() { // TODO rename to root dnode
   // Make struct
   dnode firDnode;
   firDnode.user = getuid();			   // user's id
@@ -159,7 +159,11 @@ int createDnode() {
   firDnode.direct[0].valid = 1;        // make it valid
   firDnode.single_indirect.valid = 0;  // invalid
   firDnode.double_indirect.valid = 0;  // invalid
-  
+
+  // invalidate all but the first dirent blocknums
+  for (int i = 1; i < 110; i++) { // TODO WHY HARDCODED
+  	firDnode.direct[i].valid = 0;
+	}
   // Allocate appropriate memory
   char tmpDnode[BLOCKSIZE];
   memset(tmpDnode, 0, BLOCKSIZE);
@@ -179,12 +183,16 @@ int createDirent() {
 
   // set the "." and ".." values to true and point to block 1
   blocknum curBlock = { .block = 1, .valid = 1};
-  blocknum parBlock = { .block = 1, .valid = 1};
 
   // TODO: Where do these live?
   // type 1 refers to directory
   direntry current = { .name = ".", .type = '1', .block = curBlock};   // "."
-  direntry parent = { .name = "..", .type = '1', .block = parBlock};   // ".."
+  direntry parent = { .name = "..", .type = '1', .block = curBlock};   // ".."
+
+  // invalidate direntries
+  for (int i = 0; i < 16; i++) { // TODO WHY HARDCODED
+  	dir.entries[i].block.valid = 0;
+	}
 
   // set entries
   dir.entries[0] = current;
