@@ -402,9 +402,9 @@ if (! -e $SUBSUBDIR) {
   writeFile($SUBSUBFILE, "");
   endTest((-e $SUBSUBFILE ? $PASS : $FAIL), "");
 }
-
 stopFS();
 unlink($DISK);
+=cut
 sub readFile {
   my ($file) = @_;
   open(F, "$file");
