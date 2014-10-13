@@ -40,6 +40,10 @@
 #include "disk.h"
 
 const int MAGICNUMBER = 184901;
+// Number of direntries per dirent
+const int NUM_DIRENTRIES = BLOCK_SIZE / sizeof(direntry);
+// Number of block in an indirect
+const int NUM_INDIRECT_BLOCKS = BLOCK_SIZE / sizeof(blocknum);
 
 /*
  * Initialize filesystem. Read in file system metadata and initialize
@@ -212,7 +216,7 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 
         // Look for available direntry location to put this new file
         // Loop through dnode -> direct
-        for (int i = 0; i < 20; i++) {// TODO fix hardcoded values
+        for (int i = 0; i < NUM_DIRECT; i++) {
             // TODO: Abstract this to isValid...
             // check if valid, if not get one, assign to i, call function
             if (!(thisDnode.direct[i].valid)) {
@@ -344,7 +348,7 @@ int create_inode_dirent(blocknum d, blocknum inode, const char *path, char *buf)
     memcpy(&dir, buf, BLOCKSIZE);
     
     // look through each of the direntries
-    for (int i = 0; i < 16; i++) { // TODO remove hardcoded
+    for (int i = 0; i < NUM_DIRENTRIES; i++) {
         // add the inode to the ith block that is not used yet
         if (!dir.entries[i].block.valid) {
             // set the block that lives there to the passed in inode
@@ -377,7 +381,7 @@ int create_inode_single_indirect_dirent(blocknum s, blocknum inode, const char *
     indirect single_indirect;
     memcpy(&single_indirect, buf, BLOCKSIZE);
 
-    for (int i = 0; i < 128; i++) { // TODO fix hardcoded values
+    for (int i = 0; i < NUM_INDIRECT_BLOCKS; i++) {
         // check if valid, if not get one, assign to i, call function
         if (! (single_indirect.blocks[i].valid)) {
             // create a single indirect for the ith block
@@ -412,7 +416,7 @@ int create_inode_double_indirect_dirent(blocknum d, blocknum inode, const char *
     indirect double_indirect;
     memcpy(&double_indirect, buf, BLOCKSIZE);
 
-    for (int i = 0; i < 128; i++) { // TODO fix hardcoded values
+    for (int i = 0; i < NUM_INDIRECT_BLOCKS; i++) {
         // check if valid, if not get one, assign to i, call function
         if (! (double_indirect.blocks[i].valid)) {
             // create a single indirect for the ith block
@@ -469,7 +473,7 @@ blocknum get_file(const char *path) {
     blocknum temp; 
 
     // Check dirent for the 'path'
-    for (int i = 0; i < 20; i++) {// TODO fix hardcoded values
+    for (int i = 0; i < NUM_DIRECT; i++) {
         // TODO: return blocknum, check for validity
         temp = get_inode_dirent(thisDnode.direct[i], buf, path); // FIXME &tmpBuff?
 
@@ -552,7 +556,7 @@ blocknum get_inode_dirent(blocknum b, char *buf, const char *path) {
         dread(b.block, buf);
         dirent tmpDirent;
         memcpy(&tmpDirent, buf, BLOCKSIZE);
-        for (int i = 0; i < 16; i++) { // TODO fix hardcoded values
+        for (int i = 0; i < NUM_DIRENTRIES; i++) {
             if (tmpDirent.entries[i].block.valid) {
                 if (strcmp(path, tmpDirent.entries[i].name) == 0) {
                     printf("The given file exists already\n");
@@ -578,7 +582,7 @@ blocknum get_inode_single_indirect_dirent(blocknum b, char *buf, const char *pat
         dread(b.block, buf);
         indirect single_indirect;
         memcpy(&single_indirect, buf, BLOCKSIZE);
-        for (int i = 0; i < 128; i++) { // TODO fix hardcoded values
+        for (int i = 0; i < NUM_INDIRECT_BLOCKS; i++) {
             temp = get_inode_dirent(single_indirect.blocks[i], buf, path);
             // will only be valid if file found, that is returned blocknum
             if (temp.valid) {
@@ -603,7 +607,7 @@ blocknum get_inode_double_indirect_dirent(blocknum b, char *buf, const char *pat
         dread(b.block, buf);
         indirect double_indirect;
         memcpy(&double_indirect, buf, BLOCKSIZE);
-        for (int i = 0; i < 128; i++) { // TODO fix hardcoded values
+        for (int i = 0; i < NUM_INDIRECT_BLOCKS; i++) {
             temp = get_inode_single_indirect_dirent(double_indirect.blocks[i], buf, path);
             // will only be valid if file found, that is returned blocknum
             if (temp.valid) {
