@@ -53,9 +53,6 @@ const int MAGICNUMBER = 184901;
 static void* vfs_mount(struct fuse_conn_info *conn) {
   fprintf(stderr, "vfs_mount called\n");
 
-  // Do not touch or move this code; connects the disk
-  dconnect();
-
   /* 3600: YOU SHOULD ADD CODE HERE TO CHECK THE CONSISTENCY OF YOUR DISK
            AND LOAD ANY DATA STRUCTURES INTO MEMORY */
 
@@ -73,10 +70,10 @@ static void* vfs_mount(struct fuse_conn_info *conn) {
     fprintf(stdout, "WRONG FILE SYSTEM!!!!!!!!\n");
   }
   else {
-    fprintf(stdout, "Correct Magic Number!!\n");
+    // Do not touch or move this code; connects the disk
+    dconnect();
   }
     
-
   return NULL;
 }
 

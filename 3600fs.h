@@ -7,10 +7,17 @@
 
 #ifndef __3600FS_H__
 #define __3600FS_H__
+#include "disk.h"
 
+// Constant number of pointers in direct[] inode and dnode
+#define NUM_DIRECT 110
+// Constant copy of BLOCKSIZE
+#define BLOCK_SIZE 512 
+// Maximum length of a file name
+#define MAX_FILENAME_LEN 27
 /*
   Contains the underlying file system structure defintions. The
-  structure definitions assume a blocksize of 512 bytes.
+  structure definitions assume a blocksize of BLOCKSIZE bytes.
 */
 
 // Magic number for the disk formatting
@@ -37,7 +44,7 @@ typedef struct vcb_t {
   // The location of the first FREE block
   blocknum free;
   // disk name
-  char name[496];
+  char name[BLOCK_SIZE - (2 * sizeof(int)) - (2 * sizeof(blocknum))];
 } vcb;
 
 // Represents a directory node block (DNODE). This block contains the
@@ -61,20 +68,19 @@ typedef struct dnode_t {
   // The time the directory was created
   struct timespec create_time;
   // The locations of the directory entry blocks
-  // TODO: Find the actual amoun this should be
-  blocknum direct[20];
+  blocknum direct[NUM_DIRECT];
   // Pointer to an INDIRECT block that has pointers to DIRENT blocks
   blocknum single_indirect;
   // Pointer to an INDIRECT block that has pointers to INDIRECT blocks
   // that have pointers to DIRENT blocks
   blocknum double_indirect;
-} dnode; // TODO make size 512 bytes
+} dnode;
 
 // Represents an indirect block (INDIRECT). Indirect blocks are simply 
 // blocks that store more blocknum pointers to either DIRENT blocks, or
 // other INDIRECT blocks. 
 typedef struct indirect_t {
-  blocknum blocks[128];
+  blocknum blocks[BLOCK_SIZE / sizeof(blocknum)];
 } indirect;
 
 // Represents directory entry blocks (DIRENT). Directory entry blocks
@@ -82,17 +88,17 @@ typedef struct indirect_t {
 // allocated, so they must have a valid bit.  This is a single
 // directory entry
 typedef struct direntry_t {
-  char name[27];
+  char name[MAX_FILENAME_LEN];
   char type;
   // The block number (block.valid is the valid bit)
   blocknum block;
-} direntry; // TODO: Make size a power of 2 to easily fit in dirent
+} direntry;
 
 // Represents a DIRENT block, which consists of an array of direntrys
 typedef struct dirent_t {
   // The contents of this directory
-  direntry entries[16]; // TODO: Determine size of this array
-} dirent;  // TODO: Make size 512 bytes
+  direntry entries[BLOCK_SIZE / sizeof(direntry)];
+} dirent;
 
 // Represents a file inode block (INODE). This block contains file 
 // metadata (timestamps, owner, mode) as well as pointers to the
@@ -113,7 +119,7 @@ typedef struct inode_t {
   // The time the file was created
   struct timespec create_time;
   // The locations of the data blocks
-  blocknum direct[20];
+  blocknum direct[NUM_DIRECT];
   // Pointer to an INDIRECT block that has pointers to DB blocks
   blocknum single_indirect;
   // Pointer to an INDIRECT block that has pointers to INDIRECT blocks
@@ -123,15 +129,15 @@ typedef struct inode_t {
 
 // Represents a data block (DB). These blocks contains only user data.
 typedef struct db_t {
-  char data[512];
+  char data[BLOCK_SIZE];
 } db;
 
 // Represents a free block (FREE). Contains a pointer to the next
 // free block.
 typedef struct free_t {
 blocknum next;
-char junk[508];
-} freeB;
+char junk[BLOCK_SIZE - sizeof(blocknum)];
+} freeB; // no freeBs
 
 // Find the blocknum of a given file
 // if it does not exist, return a blocknum that is invalid

@@ -21,10 +21,10 @@
 #include <time.h>
 
 #include "3600fs.h"
-#include "disk.h"
 
-const int MAGICNUMBER = 184901;
+#define MAGICNUMBER 184901
 
+void validate_structs_size();
 int createFree(int blockNum, int lastBoolean);
 int createVcb();
 int createDnode();
@@ -35,12 +35,8 @@ void myformat(int size) {
   // Do not touch or move this function
   dcreate_connect();
 
-  /* 3600: FILL IN CODE HERE.  YOU SHOULD INITIALIZE ANY ON-DISK
-           STRUCTURES TO THEIR INITIAL VALUE, AS YOU ARE FORMATTING
-           A BLANK DISK.  YOUR DISK SHOULD BE size BLOCKS IN SIZE. */
-
-  /* 3600: AN EXAMPLE OF READING/WRITING TO THE DISK IS BELOW - YOU'LL
-           WANT TO REPLACE THE CODE BELOW WITH SOMETHING MEANINGFUL. */
+  // check structures are appropriate size
+  validate_structs_size();
 
   // first, create a zero-ed out array of memory  
   char *tmpArr = (char *) malloc(BLOCKSIZE);
@@ -77,6 +73,31 @@ void myformat(int size) {
 
   // Do not touch or move this function
   dunconnect();
+}
+
+// Validate all structures are the appropriate size
+void validate_structs_size() {
+	// blocknum should be 4 bytes
+	assert(sizeof(blocknum) == 4);
+	// vcb should be BLOCKSIZE bytes
+	assert(sizeof(vcb) == BLOCKSIZE);
+	// dnode should be BLOCKSIZE bytes
+	printf("dnode size:%d\n", sizeof(dnode));
+	assert(sizeof(dnode) == BLOCKSIZE);
+	// indirect should be BLOCKSIZE bytes
+	assert(sizeof(indirect) == BLOCKSIZE);
+	// direntry should be BLOCKSIZE bytes
+	assert(sizeof(direntry) == 32);
+	// dirent should be BLOCKSIZE bytes
+	assert(sizeof(dirent) == BLOCKSIZE);
+	// inode should be BLOCKSIZE bytes
+	printf("inode size:%d\n", sizeof(inode));
+	assert(sizeof(inode) == BLOCKSIZE);
+	// db should be BLOCKSIZE bytes
+	assert(sizeof(db) == BLOCKSIZE);
+	// freeB should be BLOCKSIZE bytes
+	assert(sizeof(freeB) == BLOCKSIZE);
+
 }
 
 // Create a free block at the given blockNum and point to the next, if not last
