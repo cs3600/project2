@@ -6,9 +6,7 @@ Approach:
 
 TODO:
 
-Objects 
-  - Get definite size (check sizeof() of all structs are BLOCKSIZE)
-  - Double check size
+Objects
   - How should we handle "type" in DIRENT
   - Change pointers with stars to & in method signatures
   - Limit line length; line length = 80
