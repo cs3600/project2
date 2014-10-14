@@ -140,7 +140,9 @@ char junk[BLOCK_SIZE - sizeof(blocknum)];
 } freeB; // no freeBs
 
 // Represents a file location. Will only live in memory, not disk
-// This is used to get a dirent and a specific direntry
+// This contains the dirent blocknum a file is in,
+// and the index of the direntry in that dirent it lives
+// TODO: do we want to have this go deeper (single_indirect, double, etc...)
 typedef struct file_loc_t {
   // Distinguishes if this is a vlid file loc0
   unsigned int valid;
