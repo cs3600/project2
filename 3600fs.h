@@ -139,6 +139,17 @@ blocknum next;
 char junk[BLOCK_SIZE - sizeof(blocknum)];
 } freeB; // no freeBs
 
+// Represents a file location. Will only live in memory, not disk
+// This is used to get a dirent and a specific direntry
+typedef struct file_loc_t {
+  // Distinguishes if this is a vlid file loc0
+  unsigned int valid;
+  // The dirent blocknum where this file lives
+  blocknum dirent;
+  // The index where the direntry lives in the dirent.entries
+  unsigned int direntry;  
+} file_loc;
+
 // Find the blocknum of a given file
 // if it does not exist, return a blocknum that is invalid
 // Do we want to return where it lives in the DNode???

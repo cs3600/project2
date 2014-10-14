@@ -741,9 +741,9 @@ static int vfs_delete(const char *path)
     memcpy(buf, file_dirent, sizeof(dirent));
 
     // Get the inode block num
-    blocknum file_inode = file_dirent.entries[loc.inode];
+    blocknum file_inode = file_dirent.entries[loc.direntry].block;
     // Set that block to invalid in the dirent
-    file_dirent.entries[loc.inode].block.valid = 0;i
+    file_dirent.entries[loc.direntry].block.valid = 0;
     // write the dirent
     // Memcpy
     memcpy(buf, &file_dirent, sizeof(dirent));
