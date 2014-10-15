@@ -10,11 +10,10 @@ Objects
   - How should we handle "type" in DIRENT
   - Change pointers with stars to & in method signatures
   - Limit line length; line length = 80
-  - Do not malloc buf, change those that do
-  - Make sure tab indentation is consistent; indent = 4 spaces
+  - Make sure tab indentation is consistent
   - Ensure that if conditions that are negated (!condition) work as expected (!1 != 0)
-3600mkfs
-
+  - Logically order function declarations within each file
+  - Ensure commenting is consistent, concise, and informative
 
 3600fs (Milestone 2)
   - vfs_mount
