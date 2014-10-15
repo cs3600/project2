@@ -254,43 +254,20 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
     if (init_inode(this_inode, buf, mode, fi) != 1)
       return -1;
 
-    // Look for available direntry location to put this new file
-    // Loop through dnode -> direct
-    for (int i = 0; i < NUM_DIRECT; i++) {
-      // TODO: Abstract this to isValid...
-      // check if valid, if not get one, assign to i, call function
-      if (!(thisDnode.direct[i].valid)) {
-        // create a dirent for the ith block
-        // get the next free block
-        blocknum temp_free = get_free();
-        // try to create a dirent
-        if (!(create_dirent(temp_free, buf))) {
-          // error with create_indirect
-          return -1;
-        } 
-        // otherwise we were able to create a dirent, set that to the ith block
-        thisDnode.direct[i] = temp_free;
-      } // TODO FIXME make a helper
-            
-      // dirent is valid, look through direntries for next open slot
-      if (create_inode_dirent(thisDnode.direct[i], this_inode, path, buf)) {
-        fprintf(stderr, "\n\n\n\nYou created one!\n\n\n\n\n"); // TODO remove
-				memset(buf, 0, BLOCKSIZE);
-        memcpy(buf, &thisDnode, sizeof(dnode));
-        dwrite(1, buf);			
-        return 0;
-      } 
-    }
-   
+    // Loop through dnode direct
+    if (create_inode_direct_dirent(&thisDnode.direct, this_inode, path, buf) == 1) {
+    	return 0;
+		}
+
     // Loop through dnode -> single_indirect
-    if (create_inode_single_indirect_dirent(thisDnode.single_indirect, this_inode, path, buf)) {
+    if (create_inode_single_indirect_dirent(thisDnode.single_indirect, this_inode, path, buf) == 1) {
       memset(buf, 0, BLOCKSIZE);
       memcpy(buf, &thisDnode, sizeof(dnode));
       dwrite(1, buf);
       return 0;
     }
     // Loop through dnode -> double_indirect
-    else if (create_inode_double_indirect_dirent(thisDnode.double_indirect, this_inode, path, buf)) {
+    else if (create_inode_double_indirect_dirent(thisDnode.double_indirect, this_inode, path, buf) == 1) {
       memset(buf, 0, BLOCKSIZE);
       memcpy(buf, &thisDnode, sizeof(dnode));
       dwrite(1, buf);
@@ -305,6 +282,7 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
   // TODO: Out of memory message?
   return -1;
 }
+
 // Initialize inode metadata to the given inode blocknum.
 // Returns 0 if there is block is not valid.
 int init_inode(blocknum b, char *buf, mode_t mode, struct fuse_file_info *fi) {
@@ -417,8 +395,48 @@ int create_inode_dirent(blocknum d, blocknum inode, const char *path, char *buf)
   return 0;
 }
 
+// Create a file at the next open direntry in the given direct array.
+// Returns 0 if there is no space available for the new file in direct.
+// Returns 1 on success.
+// Returns -1 on error.
+int create_inode_direct_dirent(dirent[] *direct, const char *path, char *buf) {
+
+  // Look for available direntry location to put this new file
+  // Loop through dnode -> direct
+  for (int i = 0; i < NUM_DIRECT; i++) {
+    // TODO: Abstract this to isValid...
+    // check if valid, if not get one, assign to i, call function
+    if (!(thisDnode.direct[i].valid)) {
+      // create a dirent for the ith block
+      // get the next free block
+      blocknum temp_free = get_free();
+      // try to create a dirent
+      if (!(create_dirent(temp_free, buf))) {
+        // error with create_indirect
+        return -1;
+      } 
+      // otherwise we were able to create a dirent, set that to the ith block
+      thisDnode.direct[i] = temp_free;
+    }
+
+    // dirent is valid, look through direntries for next open slot
+    if (create_inode_dirent(thisDnode.direct[i], this_inode, path, buf)) {
+      fprintf(stderr, "\n\n\n\nYou created one!\n\n\n\n\n"); // TODO remove
+      memset(buf, 0, BLOCKSIZE);
+      memcpy(buf, &thisDnode, sizeof(dnode));
+      dwrite(1, buf);			
+      return 1;
+    } 
+  }
+
+	// No space in direct for new file
+  return 0;
+}
+
 // Create a file at the next open direntry in this single_indirect
 // returns 0 if there are no open direntries
+// Returns 1 on success.
+// Returns -1 on error.
 int create_inode_single_indirect_dirent(blocknum s, blocknum inode, const char *path, char *buf) {
   // All other blocks free, now this must be valid
   s.valid = 1;
@@ -430,14 +448,14 @@ int create_inode_single_indirect_dirent(blocknum s, blocknum inode, const char *
 
   for (int i = 0; i < NUM_INDIRECT_BLOCKS; i++) {
     // check if valid, if not get one, assign to i, call function
-    if (! (single_indirect.blocks[i].valid)) {
+    if (!(single_indirect.blocks[i].valid)) {
       // create a single indirect for the ith block
       // get the next free block
       blocknum temp_free = get_free();
       // try to create an indirect
-      if (! (create_indirect(temp_free, buf))) {
+      if (!(create_indirect(temp_free, buf))) {
         // error with create_indirect
-        return 0;
+        return -1;
       } 
       // otherwise we were able to create an indirect, set that to the ith block
       single_indirect.blocks[i] = temp_free;
@@ -465,14 +483,14 @@ int create_inode_double_indirect_dirent(blocknum d, blocknum inode, const char *
 
   for (int i = 0; i < NUM_INDIRECT_BLOCKS; i++) {
     // check if valid, if not get one, assign to i, call function
-    if (! (double_indirect.blocks[i].valid)) {
+    if (!(double_indirect.blocks[i].valid)) {
       // create a single indirect for the ith block
       // get the next free block
       blocknum temp_free = get_free();
       // try to create an indirect
-      if (! (create_indirect(temp_free, buf))) {
+      if (!(create_indirect(temp_free, buf))) {
         // error with create_indirect
-        return 0;
+        return -1;
       } 
       // otherwise we were able to create an indirect, set that to the ith block
       double_indirect.blocks[i] = temp_free;
