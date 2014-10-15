@@ -139,32 +139,73 @@ blocknum next;
 char junk[BLOCK_SIZE - sizeof(blocknum)];
 } freeB; // no freeBs
 
-// Represents a file location. Will only live in memory, not disk
-// This contains the dirent blocknum a file is in,
-// and the index of the direntry in that dirent it lives
-// TODO: do we want to have this go deeper (single_indirect, double, etc...)
+// Represents a file location. Will only live in memory, not disk.
+// This structure contains the dirent blocknum where a file is
+// located as well as the index of the specific direnty that the
+// file is located. Also, the file's location with respect to
+// direct, single_indirect, and double_indirect are contained here.
+// For double_indirect file locations, the index of the indirect
+// in which the dirent was located is stored in addition to the
+// index of the dirent.
 typedef struct file_loc_t {
-  // Distinguishes if this is a vlid file loc0
-  unsigned int valid;
-  // The dirent blocknum where this file lives
-  blocknum dirent;
-  // The index where the direntry lives in the dirent.entries
-  unsigned int direntry;  
+  // Is this a valid file location? TODO redundant? just check dirent_block.valid
+  unsigned int valid:1;
+  // Is this file located in the direct dirents?
+  unsigned int direct:1;
+  // Is this file located in the single indirect dirents?
+  unsigned int single_indirect:1;
+  // Is this file located in the double indirect dirents?
+  unsigned int double_indirect:1;
+  // The dirent blocknum where the file is located
+  blocknum dirent_block;
+  // The inode blocknum where the file is stored
+  blocknum inode_block;
+  // The index where the direntry for inode_block is located within 
+  // dirent.entries.
+  unsigned int direntry_idx;
+  // The index where the dirent is located within in an array
+  // of dirents. This applies to direct (an array of dirents),
+  // single_indirect.blocks (an array of dirents), and the following
+  // indirect: 
+  // 
+  //    dnode d;
+  //    indirect i = d.double_indirect.blocks[double_indirect_idx];
+  //    dirent dirent = i.blocks[list_idx];
+  //    direntry direntry = dirent.entries[dirent_idx];
+  unsigned int list_idx;
+  // The index of the indirect where the dirent is located within the
+  // double_indirect.
+  unsigned int indirect_idx;
 } file_loc;
 
-// Find the blocknum of a given file
-// if it does not exist, return a blocknum that is invalid
-// Do we want to return where it lives in the DNode???
-blocknum get_file(const char *path);
+// Returns the file_loc of the file specified by path.
+// If the file is not in the file system, then the function returns an 
+// invalid file_loc.
+file_loc get_file(const char *path);
 
-// TODO comment
-blocknum get_inode_dirent(blocknum b, char *buf, const char *path);
+// Returns a file_loc to the file specified by path if it exists in the
+// dirent specified by blocknum b. If b is not valid, an invalid file_loc
+// is returned.
+// If b is valid, it is the caller's responsibility to ensure that b is a 
+// blocknum to a dirent. The behavior if b is a valid blocknum to another
+// structure type is undefined.
+file_loc get_inode_dirent(blocknum b, char *buf, const char *path);
 
-// TODO comment
-blocknum get_inode_single_indirect_dirent(blocknum b, char *buf, const char *path);
+// Returns a file_loc to the file specified by path if it exists in the
+// any dirent within the indirect specified by blocknum b. If b is not valid, 
+// an invalid file_loc is returned.
+// If b is valid, it is the caller's responsibility to ensure that b is a 
+// blocknum to an indirect of dirents. The behavior if b is a valid blocknum 
+// to another structure type is undefined.
+file_loc get_inode_single_indirect_dirent(blocknum b, char *buf, const char *path);
 
-// TODO comment
-blocknum get_inode_double_indirect_dirent(blocknum b, char *buf, const char *path);
+// Returns a file_loc to the file specified by path if it exists in the
+// any dirent within any indirect within the indirect specified by blocknum b.
+// If b is not valid, an invalid file_loc is returned.
+// If b is valid, it is the caller's responsibility to ensure that b is a 
+// blocknum to an indirect of indirects of dirents. The behavior if b is a 
+// valid blocknum to another structure type is undefined.
+file_loc get_inode_double_indirect_dirent(blocknum b, char *buf, const char *path);
 
 // Initialize inode metadata to the given inode blocknum
 int init_inode(blocknum b, char *buf, mode_t mode, struct fuse_file_info *fi);
