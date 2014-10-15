@@ -221,7 +221,6 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
  */
 static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
     
-    printf("\n\n\n\nMethod called\n\n\n\n\n");
     // Allocate appropriate memory 
     char buf[BLOCKSIZE];
     // Get the dnode
@@ -231,6 +230,7 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
     // blocknum of Inode of file
     // TODO Must free file...
     file = get_file(path);
+    
     // See if the file exists
     if (file.valid) {
         // File exists...
@@ -726,8 +726,45 @@ static int vfs_delete(const char *path)
            AS FREE, AND YOU SHOULD MAKE THEM AVAILABLE TO BE USED WITH OTHER FILES */
 	// check if the file exists
 	// free DB blocks, free INode, free Dnode/dirent --> double check this is how FUSE works
-   
-    return 0;
+  char buf[BLOCKSIZE];
+  memset(buf, 0, BLOCKSIZE);
+ 
+  // Get the file location of the given path 
+  file_loc loc = get_file_loc(path);
+
+  // If it is valid, get the dirent, and go to the direntry
+  // for the given file
+  if (loc.valid) {
+    // Get the dirent
+    dirent file_dirent;
+    dread(loc.dirent, buf);
+    memcpy(buf, file_dirent, sizeof(dirent));
+
+    // Get the inode block num
+    blocknum file_inode = file_dirent.entries[loc.direntry].block;
+    // Set that block to invalid in the dirent
+    file_dirent.entries[loc.direntry].block.valid = 0;
+    // write the dirent
+    // Memcpy
+    memcpy(buf, &file_dirent, sizeof(dirent));
+    dwrite(loc.dirent, buf);
+    // Get the vcb
+    vcb this_vcb = get_vcb(buf);
+    // write over the inode block as a free block
+    freeB new_free;
+    // Have it point to the previous head of free list
+    new_free.next = this_vcb.free;
+    memcpy(buf, &new_free, sizeof(freeB));
+    dwrite(file_inode, buf);
+
+
+    // Make the free list start with the new free block
+    this_vcb.free = file_inode;
+    memcpy(buf, &this_vcb, sizeof(vcb));
+    dwrite(0, buf);
+  }    // Do not touch or move this code; connects the disk
+
+  return 0;
 }
 
 /*
