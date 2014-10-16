@@ -141,31 +141,41 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 
 	// we have a regular file
   else {
-    stbuf->st_mode  = 0777 | S_IFREG;
 
-  	// get attr if exists
-  	blocknum file = get_file(path);
- 	  if (file.valid) {
- 	 	  fprintf(stderr, "Hi hi hi hi hi******************\n");
+		// TODO remove
+		fprintf(stderr, "\n\nPATH: %s\n", path);
 
-			// read in dnode
-  		inode root_inode; 
-  		dread(file.block, buf);
-  		memcpy(buf, &root_inode, sizeof(inode));
+		// get attr if exists
+  	file_loc loc = get_file(path);
+
+  	// not valid file
+ 	  if (loc.valid) {
+      // TODO remove 
+ 	 	  fprintf(stderr, "**REGULAR FILE:**\n");
+
+			// read in inode
+  		inode this_inode; 
+  		dread(loc.inode_block.block, buf);
+  		memcpy(buf, &this_inode, sizeof(inode));
+
+			// write the file??? TODO what is this BS? 
+      stbuf->st_mode  = 0777 | S_IFREG;
 
       // update stats
-  	  stbuf->st_uid     = root_inode.user; // file uid
-  	  stbuf->st_gid     = root_inode.group; // file gid
-  	  stbuf->st_atime   = root_inode.access_time.tv_sec; // access time 
-  	  stbuf->st_mtime   = root_inode.modify_time.tv_sec; // modify time
-  	  stbuf->st_ctime   = root_inode.create_time.tv_sec; // create time
-  	  stbuf->st_size    = root_inode.size; // file size
-  	  stbuf->st_blocks  = root_inode.size / BLOCKSIZE; // file size in blocks
+  	  stbuf->st_uid     = this_inode.user; // file uid
+  	  stbuf->st_gid     = this_inode.group; // file gid
+  	  stbuf->st_atime   = this_inode.access_time.tv_sec; // access time 
+  	  stbuf->st_mtime   = this_inode.modify_time.tv_sec; // modify time
+  	  stbuf->st_ctime   = this_inode.create_time.tv_sec; // create time
+  	  stbuf->st_size    = this_inode.size; // file size
+  	  stbuf->st_blocks  = this_inode.size / BLOCKSIZE; // file size in blocks
 	  }
 
 		// otherwise something
 		else {
+			fprintf(stderr, "SEE YA BITCH!\n");
 			// invalid?
+			return -1;
 		}
 	}
   return 0;
@@ -226,7 +236,7 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
   // TODO path parsing? We should do this only if subdirs are implemented
 
   // remove debugging statement TODO
-  fprintf(stderr, "Creating file " + path);
+  fprintf(stderr, "Creating file %s\n", path);
 
   // Allocate appropriate memory 
   char buf[BLOCKSIZE];
@@ -255,7 +265,7 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
       return -1;
 
     // Loop through dnode direct
-    if (create_inode_direct_dirent(&thisDnode.direct, this_inode, path, buf) == 1) {
+    if (create_inode_direct_dirent(&thisDnode, this_inode, path, buf) == 1) {
     	return 0;
 		}
 
@@ -399,14 +409,14 @@ int create_inode_dirent(blocknum d, blocknum inode, const char *path, char *buf)
 // Returns 0 if there is no space available for the new file in direct.
 // Returns 1 on success.
 // Returns -1 on error.
-int create_inode_direct_dirent(dirent[] *direct, const char *path, char *buf) {
+int create_inode_direct_dirent(dnode *thisDnode, blocknum inode, const char *path, char *buf) {
 
   // Look for available direntry location to put this new file
   // Loop through dnode -> direct
   for (int i = 0; i < NUM_DIRECT; i++) {
     // TODO: Abstract this to isValid...
     // check if valid, if not get one, assign to i, call function
-    if (!(thisDnode.direct[i].valid)) {
+    if (!(thisDnode->direct[i].valid)) {
       // create a dirent for the ith block
       // get the next free block
       blocknum temp_free = get_free();
@@ -416,14 +426,14 @@ int create_inode_direct_dirent(dirent[] *direct, const char *path, char *buf) {
         return -1;
       } 
       // otherwise we were able to create a dirent, set that to the ith block
-      thisDnode.direct[i] = temp_free;
+      thisDnode->direct[i] = temp_free;
     }
 
     // dirent is valid, look through direntries for next open slot
-    if (create_inode_dirent(thisDnode.direct[i], this_inode, path, buf)) {
+    if (create_inode_dirent(thisDnode->direct[i], inode, path, buf)) {
       fprintf(stderr, "\n\n\n\nYou created one!\n\n\n\n\n"); // TODO remove
       memset(buf, 0, BLOCKSIZE);
-      memcpy(buf, &thisDnode, sizeof(dnode));
+      memcpy(buf, thisDnode, sizeof(dnode));
       dwrite(1, buf);			
       return 1;
     } 
@@ -506,7 +516,7 @@ int create_inode_double_indirect_dirent(blocknum d, blocknum inode, const char *
 }
 
 
-// TODO put this in a logical place within the code
+// Reads the vcb at the given block number into buf
 vcb get_vcb(char *buf) {
   // Allocate appropriate memory 
   memset(buf, 0, BLOCKSIZE);
@@ -527,7 +537,7 @@ file_loc get_file(const char *path) {
   // and double_indirect
 
   // TODO create a cache of file_loc and do a cache check here
-
+  //
   // general-purpose temporary buffer
   char *buf = (char *) malloc(BLOCKSIZE);
 
@@ -538,28 +548,32 @@ file_loc get_file(const char *path) {
   // temporary file_loc buffer
   file_loc loc; 
 
-  // Check direct dirents to see if the file specified by path
-  // exists in the filesystem.
-  // TODO with multi-directory, path must be parsed
-  for (int i = 0; i < NUM_DIRECT; i++) {
-    loc = get_inode_dirent(thisDnode.direct[i], buf, path);
+	// look at the right snippet of the path
+	char *file_path = path;
+	while (*file_path != '\0') {
+		fprintf(stderr, "Char: %c\n", *file_path);
+		// increment pointer until non '/' found; start of file name
+		if (*file_path == '/')
+			file_path++;
+		else 
+			break;
+	}
 
-    // If valid return the value of the file_loc
-    if (loc.valid) {
-      free(buf);
-      // set the direct, single_indirect, and double_indirect flags
-      loc.direct = 1;
-      loc.single_indirect = 0;
-      loc.double_indirect = 0;
-      // set the index of where the file was located in the direct array
-      loc.list_idx = i;
-      return loc;
-    }
-  } // TODO make helper
+  // TODO with multi-directory, path must be parsed
+	// TODO make check_subdirs function that just checks that the 
+	// the dnodes contain the appropriate sub dnodes, then just check
+	// the file at the end as we do below
+
+	// TODO remove
+	fprintf(stderr, "\n\nADJUSTED PATH: %s\n", file_path);
+
+	// Check each dirent in direct to see if the file specified by
+	// path exists in the filesystem.
+	loc = get_inode_direct_dirent(&thisDnode, buf, file_path);
 
   // Check each dirent in the single_indirect to see if the file specified by
   // path exists in the filesystem.
-  loc = get_inode_single_indirect_dirent(thisDnode.single_indirect, buf, path);
+  loc = get_inode_single_indirect_dirent(thisDnode.single_indirect, buf, file_path);
 
 	// If valid return the value of the file_loc
   if (loc.valid) {
@@ -573,7 +587,7 @@ file_loc get_file(const char *path) {
 
 	// Check each dirent in each indirect in the double_indirect to see if the
   // file specified by path exists in the filesystem.
-  loc = get_inode_double_indirect_dirent(thisDnode.double_indirect, buf, path);
+  loc = get_inode_double_indirect_dirent(thisDnode.double_indirect, buf, file_path);
 	// If valid return the value of the file_loc
   if (loc.valid) {
     free(buf);
@@ -661,7 +675,7 @@ file_loc get_inode_dirent(blocknum b, char *buf, const char *path) {
           // TODO remove debug statement
           fprintf(stderr, "The given file exists already\n");
           loc.valid = 1;
-          loc.dirent_block = tmp_dirent;
+          loc.dirent_block = b;
           loc.inode_block = tmp_dirent.entries[i].block;
           loc.direntry_idx = i;
           return loc;
@@ -669,11 +683,40 @@ file_loc get_inode_dirent(blocknum b, char *buf, const char *path) {
       }
     }
   }
-  // not a valid block num, return invalid file_loc
-	else {
-    loc.valid = 0;
-    return inval;
-	}
+  // file not found, return invalid file_loc
+  loc.valid = 0;
+  return loc;
+}
+
+// Returns a file_loc to the file specified by path if it exists in the
+// any dirent within the thisDnode.direct array. If not found, an invalid
+// file_loc is returned.
+file_loc get_inode_direct_dirent(dnode *thisDnode, char *buf, const char *path) {
+
+  // the file_loc to return
+  file_loc loc;
+
+  // Check direct dirents to see if the file specified by path
+  // exists in the filesystem.
+  for (int i = 0; i < NUM_DIRECT; i++) {
+    loc = get_inode_dirent(thisDnode->direct[i], buf, path);
+
+    // If valid return the value of the file_loc
+    if (loc.valid) {
+      free(buf);
+      // set the direct, single_indirect, and double_indirect flags
+      loc.direct = 1;
+      loc.single_indirect = 0;
+      loc.double_indirect = 0;
+      // set the index of where the file was located in the direct array
+      loc.list_idx = i;
+      return loc;
+    }
+  }
+
+  // file not found, return invalid file_loc
+  loc.valid = 0;
+  return loc;
 }
 
 // Returns a file_loc to the file specified by path if it exists in the
@@ -706,10 +749,8 @@ file_loc get_inode_single_indirect_dirent(blocknum b, char *buf, const char *pat
     }
   }
   // not a valid block num, return invalid file_loc
-	else {
-    loc.valid = 0;
-    return inval;
-	}
+  loc.valid = 0;
+  return loc;
 }
 
 // Returns a file_loc to the file specified by path if it exists in the
@@ -741,11 +782,9 @@ file_loc get_inode_double_indirect_dirent(blocknum b, char *buf, const char *pat
       }
     }
   }
-  // not a valid block num, return invalid file_loc
-	else {
-    loc.valid = 0;
-    return inval;
-	}
+  // file not found, return invalid file_loc
+  loc.valid = 0;
+  return loc;
 }
 
 // TODO: Multiple things have these structs.. can we abstract by passing a param???
@@ -809,7 +848,6 @@ static int vfs_delete(const char *path)
 	// check if the file exists
 	// free DB blocks, free INode, free Dnode/dirent --> double check this is how FUSE works
   char buf[BLOCKSIZE];
-  memset(buf, 0, BLOCKSIZE);
 
   // Get the file location of the given path 
   file_loc loc = get_file(path);
@@ -819,32 +857,34 @@ static int vfs_delete(const char *path)
   if (loc.valid) {
     // Get the dirent
     dirent file_dirent;
-    dread(loc.dirent, buf);
-    memcpy(buf, file_dirent, sizeof(dirent));
-
-    // Get the inode block num
-    blocknum file_inode = file_dirent.entries[loc.direntry].block;
-    // Set that block to invalid in the dirent
-    file_dirent.entries[loc.direntry].block.valid = 0;
-    // write the dirent
-    // Memcpy
+    memset(buf, 0, BLOCKSIZE);
+    dread(loc.dirent_block.block, buf);
     memcpy(buf, &file_dirent, sizeof(dirent));
-    dwrite(loc.dirent, buf);
-    // Get the vcb
+
+    // Set inode block to invalid in the dirent
+    file_dirent.entries[loc.direntry_idx].block.valid = 0;
+    // write the dirent to disk
+    memset(buf, 0, BLOCKSIZE);
+    memcpy(buf, &file_dirent, sizeof(dirent));
+    dwrite(loc.dirent_block.block, buf);
+
+    // This new free block's next will point to the 
+    // VCB's previous free block. This free block
+    // overwrites the inode block.
     vcb this_vcb = get_vcb(buf);
-    // write over the inode block as a free block
     freeB new_free;
-    // Have it point to the previous head of free list
     new_free.next = this_vcb.free;
+    memset(buf, 0, BLOCKSIZE);
     memcpy(buf, &new_free, sizeof(freeB));
-    dwrite(file_inode, buf);
+    dwrite(loc.inode_block.block, buf);
 
-
-    // Make the free list start with the new free block
-    this_vcb.free = file_inode;
+    // Update VCB to point to the a new free block
+    // that is located where the file was previously located.
+    this_vcb.free = loc.inode_block;
+    memset(buf, 0, BLOCKSIZE);
     memcpy(buf, &this_vcb, sizeof(vcb));
     dwrite(0, buf);
-  }    // Do not touch or move this code; connects the disk
+  }
 
   return 0;
 }
