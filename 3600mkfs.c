@@ -64,7 +64,6 @@ void validate_structs_size() {
 	// vcb should be BLOCKSIZE bytes
 	assert(sizeof(vcb) == BLOCKSIZE);
 	// dnode should be BLOCKSIZE bytes
-	printf("dnode size:%d\n", sizeof(dnode));
 	assert(sizeof(dnode) == BLOCKSIZE);
 	// indirect should be BLOCKSIZE bytes
 	assert(sizeof(indirect) == BLOCKSIZE);
@@ -73,7 +72,6 @@ void validate_structs_size() {
 	// dirent should be BLOCKSIZE bytes
 	assert(sizeof(dirent) == BLOCKSIZE);
 	// inode should be BLOCKSIZE bytes
-	printf("inode size:%d\n", sizeof(inode));
 	assert(sizeof(inode) == BLOCKSIZE);
 	// db should be BLOCKSIZE bytes
 	assert(sizeof(db) == BLOCKSIZE);
@@ -95,37 +93,33 @@ void init_disk_layout(const int size) {
   memset(buf, 0, BLOCKSIZE);
 
   // Write out to all the free blocks in the disk
-  for (int i = 0; i < size; i++) {
-  	//FIXME can change i to 3, and size to size-1, tackle last free outside loop
-  	// Checking each block to see if we can write to it on disk.
-  	// Also zeroes out the disk, so there are no surprises.
-  	// TODO do we need this? Doubles the amount of initial writes
-    if (dwrite(i, buf) < 0) {
+  int i;
+  for (i = 3; i < size - 1; i++) {
+    if(create_free(i, 0) < 0) {
       perror("Error while writing to disk");
-    }
-    // Assign free blocks from Block 3 -> n - 1
-    else if ((i > 2) && (i < (size - 1))) {
-      // Create a free for a non-last block (0 == false)
-      create_free(i, 0);
-    }
-    // Assign the last block as invalid
-    else if (i == (size - 1) && (i > 2)) {
-      // Create a free for the last block (1 == true)
-      create_free(i, 1);
-    } 
-    // do nothing
-    else {}
+		}
   }
 
-	// Create the vcb on disk
-  create_vcb();
+	// Create last free block
+	if (create_free(i, 1) < 0) {
+		perror("Error while writing to disk");
+	}
+
+  // Create the vcb on disk
+	if (create_vcb() < 0) {
+		perror("Error while writing to disk");
+	}
 
   // Create the root dnode on disk
-  create_root_dnode(); // TODO can abstract
+	if (create_root_dnode() < 0) {
+		perror("Error while writing to disk");
+	}
 
   // Create the root dnode's first dirent on disk
   // This dirent houses 2 valid direntries initially: '.', and '..'
-  create_root_dirent(); // TODO can abstract
+	if (create_root_dirent() < 0) {
+		perror("Error while writing to disk");
+	}
 
 }
 
@@ -148,9 +142,7 @@ int create_free(int bn, int last) {
   char buf[BLOCKSIZE];
   memset(buf, 0, BLOCKSIZE);
   memcpy(buf, &temp_free, sizeof(free_b));
-  dwrite(bn, buf);
-
-  return 0;
+  return dwrite(bn, buf);
 }
 
 // Create VCB, assign to Block 0
@@ -170,9 +162,7 @@ int create_vcb() {
   memset(tmp, 0, BLOCKSIZE);
   memcpy(tmp, &this_vcb, sizeof(vcb));
   // Write to block 0
-  dwrite(0, tmp);
- 
-  return 0;
+  return dwrite(0, tmp);
 }
 
 // Create original Dnode, assign to Block 1
@@ -200,10 +190,7 @@ int create_root_dnode() { // TODO rename to root dnode
   memset(buf, 0, BLOCKSIZE);
   memcpy(buf, &root_dnode, sizeof(dnode));
   // Write to block 1
-  dwrite(1, buf);
-  
-  return 0;
-
+  return dwrite(1, buf);
 }
 
 // Create original Dirent, assign to Block 2
@@ -234,9 +221,7 @@ int create_root_dirent() {
   memcpy(buf, &dir, sizeof(dirent));
 
   // Write to block 2
-  dwrite(2, buf);
-
-  return 0;
+  return dwrite(2, buf);
 }
 
 int main(int argc, char** argv) {

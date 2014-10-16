@@ -14,7 +14,7 @@ Objects
   - Ensure that if conditions that are negated (!condition) work as expected (!1 != 0)
   - Logically order function declarations within each file
   - Ensure commenting is consistent, concise, and informative
-  - Why do we have 2x the amount of dwrites?
+  - File metadata (timestamps, users, groups) are incorrect
 
 3600fs (Milestone 2)
   - vfs_mount
