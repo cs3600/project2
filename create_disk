@@ -1,11 +1,17 @@
 #!/bin/bash
 
-readonly TMPDIR=/tmp/numps
+readonly TMPDIR=/tmp/cooooooooooooooooooool
 
+# unmount if tmpdir exists
+if [ -e $TMPDIR ];
+then
+	echo "hi"
+  fusermount -u $TMPDIR
+  rm -rf $TMPDIR 2> /dev/null
 # create the temp dir
-fusermount -u $TMPDIR
-rm -rf $TMPDIR 2> /dev/null
-mkdir $TMPDIR
+else
+	mkdir $TMPDIR
+fi
 
 # Create a disk and mount it to the given directory
 make clean; make

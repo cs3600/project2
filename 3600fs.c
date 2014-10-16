@@ -64,7 +64,6 @@ static void* vfs_mount(struct fuse_conn_info *conn) {
   vcb myVcb;
 
   char *tmp = (char*) malloc(BLOCKSIZE);
-  //memcpy(tmp, &vcbBlock, sizeof(vcb));
 
   // Write to block 0
   dread(0, tmp);

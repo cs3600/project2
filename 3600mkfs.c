@@ -94,16 +94,6 @@ void init_disk_layout(const int size) {
   char buf[BLOCKSIZE];
   memset(buf, 0, BLOCKSIZE);
 
-	// Create the vcb on disk
-  create_vcb();
-
-  // Create the root dnode on disk
-  create_root_dnode(); // TODO can abstract
-
-  // Create the root dnode's first dirent on disk
-  // This dirent houses 2 valid direntries initially: '.', and '..'
-  create_root_dirent(); // TODO can abstract
-
   // Write out to all the free blocks in the disk
   for (int i = 0; i < size; i++) {
   	//FIXME can change i to 3, and size to size-1, tackle last free outside loop
@@ -126,6 +116,17 @@ void init_disk_layout(const int size) {
     // do nothing
     else {}
   }
+
+	// Create the vcb on disk
+  create_vcb();
+
+  // Create the root dnode on disk
+  create_root_dnode(); // TODO can abstract
+
+  // Create the root dnode's first dirent on disk
+  // This dirent houses 2 valid direntries initially: '.', and '..'
+  create_root_dirent(); // TODO can abstract
+
 }
 
 // Create a free block at the given blocknum and have it point to the
@@ -183,6 +184,8 @@ int create_root_dnode() { // TODO rename to root dnode
   root_dnode.group = getgid();           // user's group
   root_dnode.mode = (mode_t) 0777;       // set mode
   clock_gettime(CLOCK_REALTIME, &(root_dnode.access_time));  // access time
+  clock_gettime(CLOCK_REALTIME, &(root_dnode.create_time));  // create time
+  clock_gettime(CLOCK_REALTIME, &(root_dnode.modify_time));  // modify time
   root_dnode.direct[0].block = 2;        // assign first dirent to block 2
   root_dnode.direct[0].valid = 1;        // make it valid
   root_dnode.single_indirect.valid = 0;  // invalid
