@@ -3,15 +3,9 @@
 readonly TMPDIR=/tmp/cooooooooooooooooooool
 
 # unmount if tmpdir exists
-if [ -e $TMPDIR ];
-then
-	echo "hi"
-  fusermount -u $TMPDIR
-  rm -rf $TMPDIR 2> /dev/null
-# create the temp dir
-else
-	mkdir $TMPDIR
-fi
+fusermount -u $TMPDIR
+rm -rf $TMPDIR 2> /dev/null
+mkdir $TMPDIR
 
 # Create a disk and mount it to the given directory
 make clean; make

@@ -902,7 +902,7 @@ static int vfs_delete(const char *path)
     dirent file_dirent;
     memset(buf, 0, BLOCKSIZE);
     dread(loc.dirent_block.block, buf);
-    memcpy(buf, &file_dirent, sizeof(dirent));
+    memcpy(&file_dirent, buf, sizeof(dirent));
 
     // Set inode block to invalid in the dirent
     file_dirent.entries[loc.direntry_idx].block.valid = 0;
