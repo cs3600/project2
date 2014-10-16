@@ -73,7 +73,7 @@ static void* vfs_mount(struct fuse_conn_info *conn) {
 
 	// wrong file system
   if (myVcb.magic != MAGICNUMBER) {
-    fprintf(stdout, "WRONG FILE SYSTEM!!!!!!!!\n"); // TODO change this
+    fprintf(stdout, "Attempt to mount wrong filesystem!\n"); // TODO change this
     // disconnect if its not our disk
     dunconnect(); // TODO vfs_unmount?
 	}
@@ -123,7 +123,6 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 
 	// check if root
   if (strcmp("/", path) == 0) {
-  	fprintf(stderr, "In wack!");
     stbuf->st_mode  = (0777 & 0x0000FFFF) | S_IFDIR;
 
 		// read in dnode
@@ -142,16 +141,11 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 	// we have a regular file
   else {
 
-		// TODO remove
-		fprintf(stderr, "\n\nPATH: %s\n", path);
-
 		// get attr if exists
   	file_loc loc = get_file(path);
 
   	// not valid file
  	  if (loc.valid) {
-      // TODO remove 
- 	 	  fprintf(stderr, "**REGULAR FILE:**\n");
 
 			// read in inode
   		inode this_inode; 
@@ -171,10 +165,8 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
   	  stbuf->st_blocks  = this_inode.size / BLOCKSIZE; // file size in blocks
   	  return 0;
 		}
-		// otherwise file not found, create that punk
-		// TODO how to check for O_CREAT in open()??
+		// otherwise file not found
 		else {
-			fprintf(stderr, "SEE YA BITCH!\n");
 			return -ENOENT;
 		}
 	}
@@ -225,17 +217,15 @@ static int vfs_mkdir(const char *path, mode_t mode) {
 static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
                        off_t offset, struct fuse_file_info *fi)
 {
-
   fprintf(stderr, "\nIN vfs_readdir\n");
-  // we know it's the root dir
-  // TODO not for multi-level
+
+  // TODO not for multi level
+  if (strcmp("/", path) != 0) {
+  	return -1;
+	}
+	// we know it's the root dir
   char tmp_buf[BLOCKSIZE];
-  dnode root_dnode = get_dnode(1, buf);
-
-  // next offset
-  int off, nextoff = 0;
-
-  fprintf(stderr, "\nOffset: %d\n", offset);
+  dnode root_dnode = get_dnode(1, tmp_buf);
 
   // iterate over all dirents in direct
   for (int i = 0; i < NUM_DIRECT; i++) {
@@ -243,31 +233,28 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
   	blocknum dirent_b = root_dnode.direct[i];
   	// read only valid dirents
   	if (dirent_b.valid) {
-	    fprintf(stderr, "\n\nDirent at block '%d' is valid!\n\n", dirent_b.block); //TODO remove
       dirent de;
-      memset(buf, 0, BLOCKSIZE);
-      dread(dirent_b.block, buf);
-      memcpy(&de, buf, sizeof(dirent));
+      memset(tmp_buf, 0, BLOCKSIZE);
+      dread(dirent_b.block, tmp_buf);
+      memcpy(&de, tmp_buf, sizeof(dirent));
       // iterate over all direnties in dirent_b
       for (int j = 0; j < NUM_DIRENTRIES; j++) {
         // get the jth entry and load into a stat struct
         direntry dentry = de.entries[j];
         // read only valid direntries
         if (dentry.block.valid) {
-        	fprintf(stderr, "\n\nDirentry at index '%d' is valid!\n\n", j); //TODO remove
           struct stat st;
           memset(&st, 0, sizeof(st));
           // set inode block number
           st.st_ino = dentry.block.block;
-        	fprintf(stderr, "\ninode #: %d\ntype: %c\nname:%s\n", st.st_ino, st.st_mode, dentry.name); //TODO remove
           // set the mode
           st.st_mode = dentry.type;
           // fill in the filler
-          if (filler(buf, dentry.name, &st, offset)){
-        	  fprintf(stderr, "filler worked!\n"); //TODO remove
-            break; // Why? FIXME
+          char *name = dentry.name;
+        	// the filler is non 0 when buf is filled
+          if (filler(buf, name, &st, 0) != 0) {
+            break;
 				  }
-        	fprintf(stderr, "filler fucked us!\n"); //TODO remove
 			  }
       }
     }
@@ -283,6 +270,8 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
  *
  */
 static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
+
+  fprintf(stderr, "\nIN vfs_create\n");
 
   // TODO path parsing? We should do this only if subdirs are implemented
 
@@ -303,7 +292,7 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
   if (loc.valid) {
     // File exists...
           // TODO remove debug statement
-          fprintf(stderr, "The given file exists already\n");
+          fprintf(stderr, "The given file already exists.\n");
     return -EEXIST;
   }
     
@@ -485,7 +474,6 @@ int create_inode_direct_dirent(dnode *thisDnode, blocknum inode, const char *pat
 
     // dirent is valid, look through direntries for next open slot
     if (create_inode_dirent(thisDnode->direct[i], inode, path, buf)) {
-      fprintf(stderr, "\n\n\n\nYou created one!\n\n\n\n\n"); // TODO remove
       memset(buf, 0, BLOCKSIZE);
       memcpy(buf, thisDnode, sizeof(dnode));
       dwrite(1, buf);			
@@ -605,7 +593,6 @@ file_loc get_file(const char *path) {
 	// look at the right snippet of the path
 	char *file_path = path;
 	while (*file_path != '\0') {
-		fprintf(stderr, "Char: %c\n", *file_path);
 		// increment pointer until non '/' found; start of file name
 		if (*file_path == '/')
 			file_path++;
@@ -617,9 +604,6 @@ file_loc get_file(const char *path) {
 	// TODO make check_subdirs function that just checks that the 
 	// the dnodes contain the appropriate sub dnodes, then just check
 	// the file at the end as we do below
-
-	// TODO remove
-	fprintf(stderr, "\n\nADJUSTED PATH: %s\n", file_path);
 
 	// Check each dirent in direct to see if the file specified by
 	// path exists in the filesystem.

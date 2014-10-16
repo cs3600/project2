@@ -89,7 +89,7 @@ typedef struct indirect_t {
 // directory entry
 typedef struct direntry_t {
   char name[MAX_FILENAME_LEN];
-  char type;
+  unsigned char type;
   // The block number (block.valid is the valid bit)
   blocknum block;
 } direntry;
