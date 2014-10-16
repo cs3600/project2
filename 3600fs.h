@@ -137,7 +137,7 @@ typedef struct db_t {
 typedef struct free_t {
 blocknum next;
 char junk[BLOCK_SIZE - sizeof(blocknum)];
-} freeB; // no freeBs
+} free_b;
 
 // Represents a file location. Will only live in memory, not disk.
 // This structure contains the dirent blocknum where a file is

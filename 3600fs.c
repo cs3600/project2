@@ -672,7 +672,7 @@ blocknum get_free() {
     // Get the free block structure
     memset(buf, 0, BLOCKSIZE);
     dread(thisVcb.free.block, buf);
-    freeB tmpFree;
+    free_b tmpFree;
     memcpy(&tmpFree, buf, BLOCKSIZE);
 
     // capture free block
@@ -916,10 +916,10 @@ static int vfs_delete(const char *path)
     // VCB's previous free block. This free block
     // overwrites the inode block.
     vcb this_vcb = get_vcb(buf);
-    freeB new_free;
+    free_b new_free;
     new_free.next = this_vcb.free;
     memset(buf, 0, BLOCKSIZE);
-    memcpy(buf, &new_free, sizeof(freeB));
+    memcpy(buf, &new_free, sizeof(free_b));
     dwrite(loc.inode_block.block, buf);
 
     // Update VCB to point to the a new free block
