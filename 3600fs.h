@@ -13,7 +13,7 @@
 #define NUM_DIRECT 110
 // Constant copy of BLOCKSIZE
 #define BLOCK_SIZE 512 
-// Maximum length of a file name
+// Maximum length of a file name TODO make larger
 #define MAX_FILENAME_LEN 27
 /*
   Contains the underlying file system structure defintions. The
@@ -147,7 +147,7 @@ char junk[BLOCK_SIZE - sizeof(blocknum)];
 // For double_indirect file locations, the index of the indirect
 // in which the dirent was located is stored in addition to the
 // index of the dirent.
-typedef struct file_loc_t {
+typedef struct file_loc_t { // add file short name to file_loc??
   // Is this a valid file location? TODO redundant? just check dirent_block.valid
   unsigned int valid:1;
   // Is this file located in the direct dirents?

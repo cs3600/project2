@@ -108,9 +108,8 @@ static void vfs_unmount (void *private_data) {
  *
  */
 static int vfs_getattr(const char *path, struct stat *stbuf) {
-  fprintf(stderr, "vfs_getattr called\n");
-  fprintf(stderr, "%s\n", path);
-  // Do not mess with this code 
+  fprintf(stderr, "\nIN vfs_getattr\n");
+	// Do not mess with this code 
   stbuf->st_nlink = 1; // hard links
   stbuf->st_rdev  = 0;
   stbuf->st_blksize = BLOCKSIZE;
@@ -124,7 +123,8 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 
 	// check if root
   if (strcmp("/", path) == 0) {
-    stbuf->st_mode  = 0777 | S_IFDIR;
+  	fprintf(stderr, "In wack!");
+    stbuf->st_mode  = (0777 & 0x0000FFFF) | S_IFDIR;
 
 		// read in dnode
 		dnode root_dnode = get_dnode(1, buf);
@@ -137,8 +137,8 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
     stbuf->st_ctime   = root_dnode.create_time.tv_sec; // create time
 	  stbuf->st_size    = root_dnode.size; // file size
 	  stbuf->st_blocks  = root_dnode.size / BLOCKSIZE; // file size in blocks
-	}
-
+	  return 0;
+  }
 	// we have a regular file
   else {
 
@@ -159,7 +159,7 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
   		memcpy(buf, &this_inode, sizeof(inode));
 
 			// write the file??? TODO what is this BS? 
-      stbuf->st_mode  = 0777 | S_IFREG;
+      stbuf->st_mode  = (0777 & 0x0000FFFF) | S_IFREG;
 
       // update stats
   	  stbuf->st_uid     = this_inode.user; // file uid
@@ -169,16 +169,18 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
   	  stbuf->st_ctime   = this_inode.create_time.tv_sec; // create time
   	  stbuf->st_size    = this_inode.size; // file size
   	  stbuf->st_blocks  = this_inode.size / BLOCKSIZE; // file size in blocks
-	  }
-
-		// otherwise something
+  	  return 0;
+		}
+		// otherwise file not found, create that punk
+		// TODO how to check for O_CREAT in open()??
 		else {
 			fprintf(stderr, "SEE YA BITCH!\n");
-			// invalid?
-			return -1;
+			return -ENOENT;
 		}
 	}
-  return 0;
+
+	// Error when not root or root file?? TODO
+  return -1;
 }
 
 /*
@@ -223,7 +225,56 @@ static int vfs_mkdir(const char *path, mode_t mode) {
 static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
                        off_t offset, struct fuse_file_info *fi)
 {
-	return 0;
+
+  fprintf(stderr, "\nIN vfs_readdir\n");
+  // we know it's the root dir
+  // TODO not for multi-level
+  char tmp_buf[BLOCKSIZE];
+  dnode root_dnode = get_dnode(1, buf);
+
+  // next offset
+  int off, nextoff = 0;
+
+  fprintf(stderr, "\nOffset: %d\n", offset);
+
+  // iterate over all dirents in direct
+  for (int i = 0; i < NUM_DIRECT; i++) {
+  	// load dirent from disk into memory
+  	blocknum dirent_b = root_dnode.direct[i];
+  	// read only valid dirents
+  	if (dirent_b.valid) {
+	    fprintf(stderr, "\n\nDirent at block '%d' is valid!\n\n", dirent_b.block); //TODO remove
+      dirent de;
+      memset(buf, 0, BLOCKSIZE);
+      dread(dirent_b.block, buf);
+      memcpy(&de, buf, sizeof(dirent));
+      // iterate over all direnties in dirent_b
+      for (int j = 0; j < NUM_DIRENTRIES; j++) {
+        // get the jth entry and load into a stat struct
+        direntry dentry = de.entries[j];
+        // read only valid direntries
+        if (dentry.block.valid) {
+        	fprintf(stderr, "\n\nDirentry at index '%d' is valid!\n\n", j); //TODO remove
+          struct stat st;
+          memset(&st, 0, sizeof(st));
+          // set inode block number
+          st.st_ino = dentry.block.block;
+        	fprintf(stderr, "\ninode #: %d\ntype: %c\nname:%s\n", st.st_ino, st.st_mode, dentry.name); //TODO remove
+          // set the mode
+          st.st_mode = dentry.type;
+          // fill in the filler
+          if (filler(buf, dentry.name, &st, offset)){
+        	  fprintf(stderr, "filler worked!\n"); //TODO remove
+            break; // Why? FIXME
+				  }
+        	fprintf(stderr, "filler fucked us!\n"); //TODO remove
+			  }
+      }
+    }
+  }
+
+  // check single indirect and double indirect TODO
+  return 0;
 }
 
 /*
@@ -251,7 +302,9 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
   // See if the file exists
   if (loc.valid) {
     // File exists...
-    return -1;
+          // TODO remove debug statement
+          fprintf(stderr, "The given file exists already\n");
+    return -EEXIST;
   }
     
   // Get next free block
@@ -389,7 +442,8 @@ int create_inode_dirent(blocknum d, blocknum inode, const char *path, char *buf)
       dir.entries[i].block = inode;
       // set the name to the given path TODO: check length...
       // TODO don't hardcode...
-      strncpy(dir.entries[i].name, path, 27); // TODO null term?
+      // TODO won't work for multi dir
+      strncpy(dir.entries[i].name, path+1, MAX_FILENAME_LEN); // TODO null term?
       // set the type to a file
       dir.entries[i].type = 0; // make constant TODO
 
@@ -571,6 +625,12 @@ file_loc get_file(const char *path) {
 	// path exists in the filesystem.
 	loc = get_inode_direct_dirent(&thisDnode, buf, file_path);
 
+	// If valid return the value of the file_loc
+	if (loc.valid) {
+		free(buf);
+		return loc;
+	}
+
   // Check each dirent in the single_indirect to see if the file specified by
   // path exists in the filesystem.
   loc = get_inode_single_indirect_dirent(thisDnode.single_indirect, buf, file_path);
@@ -672,8 +732,6 @@ file_loc get_inode_dirent(blocknum b, char *buf, const char *path) {
       if (tmp_dirent.entries[i].block.valid) {
         // the file exists, update file_loc result and return it
         if (strcmp(path, tmp_dirent.entries[i].name) == 0) {
-          // TODO remove debug statement
-          fprintf(stderr, "The given file exists already\n");
           loc.valid = 1;
           loc.dirent_block = b;
           loc.inode_block = tmp_dirent.entries[i].block;
@@ -703,7 +761,6 @@ file_loc get_inode_direct_dirent(dnode *thisDnode, char *buf, const char *path) 
 
     // If valid return the value of the file_loc
     if (loc.valid) {
-      free(buf);
       // set the direct, single_indirect, and double_indirect flags
       loc.direct = 1;
       loc.single_indirect = 0;
@@ -815,6 +872,7 @@ blocknum get_double_block(int loc) {
 static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
                     struct fuse_file_info *fi)
 {
+  fprintf(stderr, "\nIN vfs_read\n");
   return 0;
 }
 
@@ -833,6 +891,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
                      off_t offset, struct fuse_file_info *fi)
 {
 
+  fprintf(stderr, "\nIN vfs_write\n");
   /* 3600: NOTE THAT IF THE OFFSET+SIZE GOES OFF THE END OF THE FILE, YOU
            MAY HAVE TO EXTEND THE FILE (ALLOCATE MORE BLOCKS TO IT). */
 
@@ -845,6 +904,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
  */
 static int vfs_delete(const char *path)
 {
+  fprintf(stderr, "\nIN vfs_delete\n");
 	// check if the file exists
 	// free DB blocks, free INode, free Dnode/dirent --> double check this is how FUSE works
   char buf[BLOCKSIZE];
@@ -900,6 +960,7 @@ static int vfs_delete(const char *path)
  */
 static int vfs_rename(const char *from, const char *to)
 {
+  fprintf(stderr, "\nIN vfs_rename\n");
   // get_file -> then rename...
   return 0;
 }
@@ -916,6 +977,7 @@ static int vfs_rename(const char *from, const char *to)
  */
 static int vfs_chmod(const char *file, mode_t mode)
 {
+  fprintf(stderr, "\nIN vfs_chmod\n");
   // get_file -> reassign
   return 0;
 }
@@ -927,6 +989,7 @@ static int vfs_chmod(const char *file, mode_t mode)
  */
 static int vfs_chown(const char *file, uid_t uid, gid_t gid)
 {
+  fprintf(stderr, "\nIN vfs_chown\n");
   // get file -> reassign
   return 0;
 }
@@ -937,6 +1000,7 @@ static int vfs_chown(const char *file, uid_t uid, gid_t gid)
  */
 static int vfs_utimens(const char *file, const struct timespec ts[2])
 {
+  fprintf(stderr, "\nIN vfs_utimens\n");
   return 0;
 }
 
@@ -947,7 +1011,7 @@ static int vfs_utimens(const char *file, const struct timespec ts[2])
  */
 static int vfs_truncate(const char *file, off_t offset)
 {
-
+  fprintf(stderr, "\nIN vfs_truncate\n");
   /* 3600: NOTE THAT ANY BLOCKS FREED BY THIS OPERATION SHOULD
            BE AVAILABLE FOR OTHER FILES TO USE. */
 

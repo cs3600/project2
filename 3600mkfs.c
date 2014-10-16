@@ -151,6 +151,7 @@ int createVcb() {
 int createDnode() { // TODO rename to root dnode
   // Make struct
   dnode firDnode;
+  firDnode.size = 2; // initially 2 entries ".", and ".."
   firDnode.user = getuid();			   // user's id
   firDnode.group = getgid();           // user's group
   firDnode.mode = (mode_t) 0777;       // set mode

@@ -3,10 +3,16 @@
 readonly TMPDIR=/tmp/numps
 
 # create the temp dir
+fusermount -u $TMPDIR
 rm -rf $TMPDIR 2> /dev/null
 mkdir $TMPDIR
 
 # Create a disk and mount it to the given directory
 make clean; make
 ./3600mkfs 1000
-./3600fs -s -d $TMPDIR 
+
+if [[ $# -eq 1 && $1 == "-d" ]]; then
+  gdb --args ./3600fs -s -d $TMPDIR
+else
+	./3600fs -s -d $TMPDIR
+fi
