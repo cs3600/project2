@@ -14,7 +14,7 @@
 // Constant copy of BLOCKSIZE
 #define BLOCK_SIZE 512 
 // Maximum length of a file name TODO make larger
-#define MAX_FILENAME_LEN 27
+#define MAX_FILENAME_LEN 59 
 /*
   Contains the underlying file system structure defintions. The
   structure definitions assume a blocksize of BLOCKSIZE bytes.

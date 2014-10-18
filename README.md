@@ -1,12 +1,21 @@
 Project 2
 =========
 
-Approach:
+#OUTLINE
+This readme outlines what we have left to do for the project. At a later point this
+will be updated to reflect what the project is about, the difficulties we faced,
+what we've learned, etcetera.
+
+#REFLECTION
+
+#TOOLS
+
+"./create_dir"
+    use to create a 1000 block FS mounted at /tmp/NAME
 
 
-TODO:
+#TODO
 
-Objects
   - How should we handle "type" in DIRENT
   - Change pointers with stars to & in method signatures
   - Limit line length; line length = 80
@@ -15,11 +24,3 @@ Objects
   - Logically order function declarations within each file
   - Ensure commenting is consistent, concise, and informative
   - File metadata (timestamps, users, groups) are incorrect
-
-3600fs (Milestone 2)
-  - vfs_mount
-  - vfs_create
-  - vfs_delete
-  - vfs_readdir
-  - vfs_getattr
-  - Create and read FCBs

@@ -68,7 +68,7 @@ void validate_structs_size() {
 	// indirect should be BLOCKSIZE bytes
 	assert(sizeof(indirect) == BLOCKSIZE);
 	// direntry should be BLOCKSIZE bytes
-	assert(sizeof(direntry) == 32);
+	assert(sizeof(direntry) == 64);
 	// dirent should be BLOCKSIZE bytes
 	assert(sizeof(dirent) == BLOCKSIZE);
 	// inode should be BLOCKSIZE bytes

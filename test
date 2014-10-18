@@ -193,7 +193,7 @@ if (! $done) {
 
 stopFS();
 unlink($DISK);
-=cut
+
 startSection("Final tests");
 execute("$MKFS 100000");
 runFS();
@@ -404,7 +404,7 @@ if (! -e $SUBSUBDIR) {
 }
 stopFS();
 unlink($DISK);
-=cut
+
 sub readFile {
   my ($file) = @_;
   open(F, "$file");
