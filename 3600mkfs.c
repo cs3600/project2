@@ -166,7 +166,7 @@ int create_vcb() {
 }
 
 // Create original Dnode, assign to Block 1
-int create_root_dnode() { // TODO rename to root dnode
+int create_root_dnode() {
   // Make struct
   dnode root_dnode;
   root_dnode.size = 2; // initially 2 entries ".", and ".."
@@ -207,7 +207,7 @@ int create_root_dirent() {
   direntry parent = { .name = "..", .type = '1', .block = cur_block};   // ".."
 
   // invalidate direntries
-  for (int i = 0; i < 16; i++) { // TODO WHY HARDCODED
+  for (int i = 0; i < 8; i++) { // TODO WHY HARDCODED
   	dir.entries[i].block.valid = 0;
 	}
 

@@ -147,6 +147,8 @@ char junk[BLOCK_SIZE - sizeof(blocknum)];
 // For double_indirect file locations, the index of the indirect
 // in which the dirent was located is stored in addition to the
 // index of the dirent.
+// The file_loc can also be used to return locations of the first
+// open direntry (which would be invalid),
 typedef struct file_loc_t { // add file short name to file_loc??
   // Is this a valid file location? TODO redundant? just check dirent_block.valid
   unsigned int valid:1;
@@ -156,6 +158,13 @@ typedef struct file_loc_t { // add file short name to file_loc??
   unsigned int single_indirect:1;
   // Is this file located in the double indirect dirents?
   unsigned int double_indirect:1;
+  // Has the first invalid direntry been set? If this bit is set
+  // and the file_loc is not valid, then direntry_idx will denote
+  // the index of the first open slot in the direntry specified
+  // by dirent_block
+  unsigned int first_open_direntry_found:1;
+	// the dnode in which the file immediately lives in
+	dnode parent_dnode;
   // The dirent blocknum where the file is located
   blocknum dirent_block;
   // The inode blocknum where the file is stored
@@ -176,6 +185,7 @@ typedef struct file_loc_t { // add file short name to file_loc??
   // The index of the indirect where the dirent is located within the
   // double_indirect.
   unsigned int indirect_idx;
+  blocknum indirect_block; //TODO
 } file_loc;
 
 // Returns the file_loc of the file specified by path.
@@ -189,12 +199,12 @@ file_loc get_file(const char *path);
 // If b is valid, it is the caller's responsibility to ensure that b is a 
 // blocknum to a dirent. The behavior if b is a valid blocknum to another
 // structure type is undefined.
-file_loc get_inode_dirent(blocknum b, char *buf, const char *path);
+void get_inode_dirent(blocknum b, char *buf, const char *path, file_loc *loc);
 
 // Returns a file_loc to the file specified by path if it exists in the
 // any dirent within the thisDnode.direct array. If not found, an invalid
 // file_loc is returned.
-file_loc get_inode_direct_dirent(dnode *thisDnode, char *buf, const char *path);
+void get_inode_direct_dirent(dnode *thisDnode, char *buf, const char *path, file_loc *loc);
 
 // Returns a file_loc to the file specified by path if it exists in the
 // any dirent within the indirect specified by blocknum b. If b is not valid, 
@@ -202,7 +212,7 @@ file_loc get_inode_direct_dirent(dnode *thisDnode, char *buf, const char *path);
 // If b is valid, it is the caller's responsibility to ensure that b is a 
 // blocknum to an indirect of dirents. The behavior if b is a valid blocknum 
 // to another structure type is undefined.
-file_loc get_inode_single_indirect_dirent(blocknum b, char *buf, const char *path);
+void get_inode_single_indirect_dirent(blocknum b, char *buf, const char *path, file_loc *loc);
 
 // Returns a file_loc to the file specified by path if it exists in the
 // any dirent within any indirect within the indirect specified by blocknum b.
@@ -210,7 +220,7 @@ file_loc get_inode_single_indirect_dirent(blocknum b, char *buf, const char *pat
 // If b is valid, it is the caller's responsibility to ensure that b is a 
 // blocknum to an indirect of indirects of dirents. The behavior if b is a 
 // valid blocknum to another structure type is undefined.
-file_loc get_inode_double_indirect_dirent(blocknum b, char *buf, const char *path);
+void get_inode_double_indirect_dirent(blocknum b, char *buf, const char *path, file_loc *loc);
 
 // Initialize inode metadata to the given inode blocknum
 int init_inode(blocknum b, char *buf, mode_t mode, struct fuse_file_info *fi);
@@ -223,27 +233,12 @@ int create_indirect(blocknum b, char *buf);
 // returns 0 if there is an error in doing so
 int create_dirent(blocknum b, char *buf);
 
+// TODO
+int create_new_direntry(file_loc *loc, blocknum inode, char *path, char *buf);
+
 // Create a file at the next open direntry in this dirent
 // returns 0 if there are no open direntries
 int create_inode_dirent(blocknum d, blocknum inode, const char *path, char *buf);
-
-// Create a file at the next open direntry in the given direct array.
-// Returns 0 if there is no space available for the new file in direct.
-// Returns 1 on success.
-// Returns -1 on error.
-int create_inode_direct_dirent(dnode *dnode, blocknum inode, const char *path, char *buf); 
-
-// Create a file at the next open direntry in this single_indirect
-// returns 0 if there are no open direntries
-// Returns 1 on success.
-// Returns -1 on error.
-int create_inode_single_indirect_dirent(blocknum s, blocknum inode, const char *path, char *buf);
-
-// Create a file at the next open direntry in this double_indirect
-// returns 0 if there are no open direntries
-// Returns 1 on success.
-// Returns -1 on error.
-int create_inode_double_indirect_dirent(blocknum d, blocknum inode, const char *path, char *buf);
 
 // Reads the dnode at the given block number into buf
 dnode get_dnode(unsigned int b, char *buf);
