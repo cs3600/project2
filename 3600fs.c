@@ -1038,7 +1038,37 @@ static int vfs_chown(const char *file, uid_t uid, gid_t gid)
 static int vfs_utimens(const char *file, const struct timespec ts[2])
 {
   fprintf(stderr, "\nIN vfs_utimens\n");
+
+  // Get the file/directory
+  file_loc loc = get_file(file);
+ 
+  // If the file exists, change mode
+  if (loc.valid) {
+    // Get the inode for the file
+    // TODO: Should we abstarct this as well???
+    inode this_inode;
+    char buf[512];
+    dread(loc.inode_block.block, buf);
+    memcpy(buf, &this_inode, sizeof(inode));
+
+    // Change shit up
+    this_inode.access_time = ts[0];
+    this_inode.modify_time = ts[1];
+
+    // Write modified one to disk
+    memcpy(&this_inode, buf, sizeof(inode));
+    dwrite(loc.inode_block.block, buf);
+    return 0;
+  }
+  
+  // No such file exists
+  // TODO: get this to work for directories
+  else {
+    return -1;
+  }
+
   return 0;
+
 }
 
 /*
