@@ -149,11 +149,9 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 			// read in inode
   		inode this_inode; 
   		dread(loc.inode_block.block, buf);
-  		memcpy(buf, &this_inode, sizeof(inode));
-
+  		memcpy(&this_inode, buf, sizeof(inode));
 			// write the file??? TODO what is this BS? 
       stbuf->st_mode  = (0777 & 0x0000FFFF) | S_IFREG;
-
       // update stats
   	  stbuf->st_uid     = this_inode.user; // file uid
   	  stbuf->st_gid     = this_inode.group; // file gid
@@ -162,6 +160,9 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
   	  stbuf->st_ctime   = this_inode.create_time.tv_sec; // create time
   	  stbuf->st_size    = this_inode.size; // file size
   	  stbuf->st_blocks  = this_inode.size / BLOCKSIZE; // file size in blocks
+
+      fprintf(stderr, "\n** THIS UID IN ST_BUF: %ld **\n", stbuf->st_uid);
+      fprintf(stderr, "\n** THIS GID IN ST_BUF: %ld **\n", stbuf->st_gid);
   	  return 0;
 		}
 		// otherwise file not found
@@ -300,7 +301,6 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
     
   // Check that the free block is valid
   if (this_inode.valid) {
-
     // Set up Inode; if not 1, the inode was not set
     if (init_inode(this_inode, buf, mode, fi) != 1)
       return -1;
@@ -347,6 +347,9 @@ int init_inode(blocknum b, char *buf, mode_t mode, struct fuse_file_info *fi) {
     new_inode.user = getuid();
     // TODO the file's group is the current group?
     new_inode.group = getgid();
+    fprintf(stderr, "\n**** THIS UID INIT: %ld ****\n", new_inode.user);
+    fprintf(stderr, "\n**** THIS GID INIT: %ld ****\n", new_inode.group);
+			// write the file??? TODO what is this BS? 
     // set the file's mode
     new_inode.mode = mode;
     // get the clock time and set access/modified/created
@@ -969,15 +972,15 @@ static int vfs_chmod(const char *file, mode_t mode)
     // Get the inode for the file
     // TODO: Should we abstarct this as well???
     inode this_inode;
-    char buf[512];
+    char buf[BLOCKSIZE];
     dread(loc.inode_block.block, buf);
-    memcpy(buf, &this_inode, sizeof(inode));
+    memcpy(&this_inode, buf, sizeof(inode));
 
     // Change shit up
     this_inode.mode = mode;
 
     // Write modified one to disk
-    memcpy(&this_inode, buf, sizeof(inode));
+    memcpy(buf, &this_inode, sizeof(inode));
     dwrite(loc.inode_block.block, buf);
     return 0;
   }
@@ -1007,17 +1010,18 @@ static int vfs_chown(const char *file, uid_t uid, gid_t gid)
     // Get the inode for the file
     // TODO: Should we abstarct this as well???
     inode this_inode;
-    char buf[512];
+    char buf[BLOCKSIZE];
+    
     dread(loc.inode_block.block, buf);
-    memcpy(buf, &this_inode, sizeof(inode));
+    memcpy(&this_inode, buf, sizeof(inode));
 
-    // Change shit up
     this_inode.user = uid;
     this_inode.group = gid;
-
+    
     // Write modified one to disk
-    memcpy(&this_inode, buf, sizeof(inode));
+    memcpy(buf, &this_inode, sizeof(inode));
     dwrite(loc.inode_block.block, buf);
+
     return 0;
   }
   
@@ -1047,16 +1051,16 @@ static int vfs_utimens(const char *file, const struct timespec ts[2])
     // Get the inode for the file
     // TODO: Should we abstarct this as well???
     inode this_inode;
-    char buf[512];
+    char buf[BLOCKSIZE];
     dread(loc.inode_block.block, buf);
-    memcpy(buf, &this_inode, sizeof(inode));
+    memcpy(&this_inode, buf, sizeof(inode));
 
     // Change shit up
     this_inode.access_time = ts[0];
     this_inode.modify_time = ts[1];
 
     // Write modified one to disk
-    memcpy(&this_inode, buf, sizeof(inode));
+    memcpy(buf, &this_inode, sizeof(inode));
     dwrite(loc.inode_block.block, buf);
     return 0;
   }

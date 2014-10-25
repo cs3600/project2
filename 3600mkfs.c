@@ -171,7 +171,7 @@ int create_root_dnode() { // TODO rename to root dnode
   dnode root_dnode;
   root_dnode.size = 2; // initially 2 entries ".", and ".."
   root_dnode.user = getuid();			   // user's id
-  root_dnode.group = getgid();           // user's group
+  root_dnode.group = getgid();           // user's group 
   root_dnode.mode = (mode_t) 0777;       // set mode
   clock_gettime(CLOCK_REALTIME, &(root_dnode.access_time));  // access time
   clock_gettime(CLOCK_REALTIME, &(root_dnode.create_time));  // create time
