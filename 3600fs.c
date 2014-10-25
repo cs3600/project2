@@ -948,7 +948,7 @@ static int vfs_rename(const char *from, const char *to)
   // get_file -> then rename...
 
   // if they are the same, no need to actually rename
-  if (strncmp(from, to, MAXFILENAME_LEN) == 0) {
+  if (strncmp(from, to, MAX_FILENAME_LEN) == 0) {
     return 0;
   }
 
@@ -961,7 +961,7 @@ static int vfs_rename(const char *from, const char *to)
     // see if the file name we want to use exists
     file_loc loc_change_to = get_file(to);
     // if that file exists, delete it
-    if (loc_chnage_to.valid) {
+    if (loc_change_to.valid) {
       vfs_delete(to);
     }
 
