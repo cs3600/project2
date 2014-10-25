@@ -958,12 +958,8 @@ static int vfs_rename(const char *from, const char *to)
   // If the file exists, change mode
   if (loc.valid) {
 
-    // see if the file name we want to use exists
-    file_loc loc_change_to = get_file(to);
-    // if that file exists, delete it
-    if (loc_change_to.valid) {
-      vfs_delete(to);
-    }
+    // Delete it if it exists, otherwise does nothing...
+    vfs_delete(to);
 
     // Get the dirent and adjust the name...
     // TODO: Should we abstarct this as well???
