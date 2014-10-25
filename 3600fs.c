@@ -879,8 +879,73 @@ static int vfs_write(const char *path, const char *buf, size_t size,
   /* 3600: NOTE THAT IF THE OFFSET+SIZE GOES OFF THE END OF THE FILE, YOU
            MAY HAVE TO EXTEND THE FILE (ALLOCATE MORE BLOCKS TO IT). */
 
+  file_loc loc = get_file(path);
+  // file does not exist
+  if (!loc.valid) {
+    return -1;
+  }
+
+  // TODO use a helper function to get inode block
+  char tmp_buf[BLOCKSIZE];
+  memset(tmp_buf, 0, BLOCKSIZE);
+  dread(loc.inode_block.block, tmp_buf);
+  inode this_inode;
+  memcpy(&this_inode, tmp_buf, sizeof(inode));
+  
+  // calculate the extra bytes we need to write to the file
+  int needed_bytes = offset - this_inode.size + size;
+  int current_blocks = (int) ceil((double) this_inode.size / BLOCKSIZE);
+  int needed_blocks = (int) ceil((double) needed_bytes / BLOCKSIZE);
+  // the additional number of blocks needed to write the data
+  int additional_blocks = needed_blocks - current_blocks;
+
+  // the blocks we need to write to
+  blocknum blocks[additional_blocks];
+
+  // get the free blocks needed to write additional data
+  for (int i = 0; i < additional_blocks; i++) {
+    blocknum free_block = get_free();
+    // if we ran out of free blocks
+    if (!free_block.valid) {
+      release_free(blocks, i);
+      return -1;
+    }
+    blocks[i] = free_block;
+  }
+
+
   return 0;
 }
+
+
+// Add the given list of blocks to our free block list
+void release_free(blocknum blocks[], int size) {
+  // temp buffer
+  char buf[BLOCKSIZE];
+  // get the vcb to update the free blocks
+  vcb this_vcb = get_vcb(buf);
+  // get the head of the free block list
+  blocknum tmp = this_vcb.free;
+
+  // free all given blocks
+  for (int i = 0; i < size; i++) {
+    free_b new_free;
+    new_free.next = tmp;
+    //  zero out buffer
+    memset(buf, 0, BLOCKSIZE);
+    memcpy(buf, &new_free, sizeof(free_b));
+    // write new free block to disk
+    dwrite(blocks[i].block, buf);
+    tmp = blocks[i];
+  }
+  // update the vcb free list head
+  this_vcb.free = tmp;
+  memset(buf, 0, BLOCKSIZE);
+  memcpy(buf, &this_vcb, sizeof(vcb));
+  dwrite(0, buf);
+}
+
+
 
 /**
  * This function deletes the last component of the path (e.g., /a/b/c you 

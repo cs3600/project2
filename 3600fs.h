@@ -262,5 +262,7 @@ blocknum get_single_block(int loc);
 // Access Double_indirect
 blocknum get_double_block(int loc);
 
+// rename
+void release_free(blocknum blocks[], int size);
 
 #endif
