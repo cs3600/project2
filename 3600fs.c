@@ -946,6 +946,48 @@ static int vfs_rename(const char *from, const char *to)
 {
   fprintf(stderr, "\nIN vfs_rename\n");
   // get_file -> then rename...
+
+  // if they are the same, no need to actually rename
+  if (strncmp(from, to, MAXFILENAME_LEN) == 0) {
+    return 0;
+  }
+
+  // now get the file we are going to change
+  file_loc loc = get_file(from);
+
+  // If the file exists, change mode
+  if (loc.valid) {
+
+    // see if the file name we want to use exists
+    file_loc loc_change_to = get_file(to);
+    // if that file exists, delete it
+    if (loc_chnage_to.valid) {
+      vfs_delete(to);
+    }
+
+    // Get the dirent and adjust the name...
+    // TODO: Should we abstarct this as well???
+    dirent this_dirent;
+    char buf[BLOCKSIZE];
+    dread(loc.dirent_block.block, buf);
+    memcpy(&this_dirent, buf, sizeof(dirent));
+
+    // Change the name at the proper direntry
+    // TODO: Change the +1
+    strncpy(this_dirent.entries[loc.direntry_idx].name, to+1, MAX_FILENAME_LEN);
+
+    // Write modified one to disk
+    memcpy(buf, &this_dirent, sizeof(dirent));
+    dwrite(loc.dirent_block.block, buf);
+
+    return 0;
+  }
+  
+  // No such file exists
+  // TODO: get this to work for directories
+  else {
+    return -1;
+  }
   return 0;
 }
 
@@ -980,9 +1022,6 @@ static int vfs_chmod(const char *file, mode_t mode)
     // Write modified one to disk
     memcpy(buf, &this_inode, sizeof(inode));
     dwrite(loc.inode_block.block, buf);
-
-    dread(loc.inode_block.block, buf);
-    memcpy(&this_inode, buf, sizeof(inode));
 
     return 0;
   }
