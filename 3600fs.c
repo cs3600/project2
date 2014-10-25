@@ -347,9 +347,7 @@ int init_inode(blocknum b, char *buf, mode_t mode, struct fuse_file_info *fi) {
     new_inode.user = getuid();
     // TODO the file's group is the current group?
     new_inode.group = getgid();
-    fprintf(stderr, "\n**** THIS UID INIT: %ld ****\n", new_inode.user);
-    fprintf(stderr, "\n**** THIS GID INIT: %ld ****\n", new_inode.group);
-			// write the file??? TODO what is this BS? 
+
     // set the file's mode
     new_inode.mode = mode;
     // get the clock time and set access/modified/created
@@ -976,13 +974,9 @@ static int vfs_chmod(const char *file, mode_t mode)
     dread(loc.inode_block.block, buf);
     memcpy(&this_inode, buf, sizeof(inode));
 
-    fprintf(stderr, "\n** MODE PASSED IN: %o **\n", mode);
-    fprintf(stderr, "\n** INODE MODE: %o **\n", this_inode.mode);
-
     // Change shit up
     this_inode.mode = (mode_t) mode;
 
-    fprintf(stderr, "\n**** INODE MODE CHANGED BEFORE WRITE: %o **\n", this_inode.mode);
     // Write modified one to disk
     memcpy(buf, &this_inode, sizeof(inode));
     dwrite(loc.inode_block.block, buf);
@@ -990,7 +984,6 @@ static int vfs_chmod(const char *file, mode_t mode)
     dread(loc.inode_block.block, buf);
     memcpy(&this_inode, buf, sizeof(inode));
 
-    fprintf(stderr, "\n******** INODE MODE CHANGED AFTER WRITE: %o **\n", this_inode.mode);
     return 0;
   }
   
