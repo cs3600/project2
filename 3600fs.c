@@ -122,10 +122,11 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 
 	// check if root
   if (strcmp("/", path) == 0) {
-    stbuf->st_mode  = (0777 & 0x0000FFFF) | S_IFDIR;
-
-		// read in dnode
+    
+    // read in dnode
 		dnode root_dnode = get_dnode(1, buf);
+
+    stbuf->st_mode  = root_dnode.mode | S_IFDIR;		
 
     // update stats
 	  stbuf->st_uid     = root_dnode.user; // file uid
@@ -150,8 +151,10 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
   		inode this_inode; 
   		dread(loc.inode_block.block, buf);
   		memcpy(&this_inode, buf, sizeof(inode));
+
 			// write the file??? TODO what is this BS? 
-      stbuf->st_mode  = (0777 & 0x0000FFFF) | S_IFREG;
+      stbuf->st_mode  = this_inode.mode | S_IFREG;
+
       // update stats
   	  stbuf->st_uid     = this_inode.user; // file uid
   	  stbuf->st_gid     = this_inode.group; // file gid
@@ -160,9 +163,6 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
   	  stbuf->st_ctime   = this_inode.create_time.tv_sec; // create time
   	  stbuf->st_size    = this_inode.size; // file size
   	  stbuf->st_blocks  = this_inode.size / BLOCKSIZE; // file size in blocks
-
-      fprintf(stderr, "\n** THIS UID IN ST_BUF: %ld **\n", stbuf->st_uid);
-      fprintf(stderr, "\n** THIS GID IN ST_BUF: %ld **\n", stbuf->st_gid);
   	  return 0;
 		}
 		// otherwise file not found
@@ -976,12 +976,21 @@ static int vfs_chmod(const char *file, mode_t mode)
     dread(loc.inode_block.block, buf);
     memcpy(&this_inode, buf, sizeof(inode));
 
-    // Change shit up
-    this_inode.mode = mode;
+    fprintf(stderr, "\n** MODE PASSED IN: %o **\n", mode);
+    fprintf(stderr, "\n** INODE MODE: %o **\n", this_inode.mode);
 
+    // Change shit up
+    this_inode.mode = (mode_t) mode;
+
+    fprintf(stderr, "\n**** INODE MODE CHANGED BEFORE WRITE: %o **\n", this_inode.mode);
     // Write modified one to disk
     memcpy(buf, &this_inode, sizeof(inode));
     dwrite(loc.inode_block.block, buf);
+
+    dread(loc.inode_block.block, buf);
+    memcpy(&this_inode, buf, sizeof(inode));
+
+    fprintf(stderr, "\n******** INODE MODE CHANGED AFTER WRITE: %o **\n", this_inode.mode);
     return 0;
   }
   
