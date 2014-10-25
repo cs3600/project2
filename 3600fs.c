@@ -962,6 +962,32 @@ static int vfs_chmod(const char *file, mode_t mode)
 {
   fprintf(stderr, "\nIN vfs_chmod\n");
   // get_file -> reassign
+  file_loc loc = get_file(file);
+
+  // If the file exists, change mode
+  if (loc.valid) {
+    // Get the inode for the file
+    // TODO: Should we abstarct this as well???
+    inode this_inode;
+    char buf[512];
+    dread(loc.inode_block.block, buf);
+    memcpy(buf, &this_inode, sizeof(inode));
+
+    // Change shit up
+    this_inode.mode = mode;
+
+    // Write modified one to disk
+    memcpy(&this_inode, buf, sizeof(inode));
+    dwrite(loc.inode_block.block, buf);
+    return 0;
+  }
+  
+  // No such file exists
+  // TODO: get this to work for directories
+  else {
+    return -1;
+  }
+
   return 0;
 }
 
@@ -974,7 +1000,35 @@ static int vfs_chown(const char *file, uid_t uid, gid_t gid)
 {
   fprintf(stderr, "\nIN vfs_chown\n");
   // get file -> reassign
+  file_loc loc = get_file(file);
+
+   // If the file exists, change mode
+  if (loc.valid) {
+    // Get the inode for the file
+    // TODO: Should we abstarct this as well???
+    inode this_inode;
+    char buf[512];
+    dread(loc.inode_block.block, buf);
+    memcpy(buf, &this_inode, sizeof(inode));
+
+    // Change shit up
+    this_inode.user = uid;
+    this_inode.group = gid;
+
+    // Write modified one to disk
+    memcpy(&this_inode, buf, sizeof(inode));
+    dwrite(loc.inode_block.block, buf);
+    return 0;
+  }
+  
+  // No such file exists
+  // TODO: get this to work for directories
+  else {
+    return -1;
+  }
+
   return 0;
+
 }
 
 /*
