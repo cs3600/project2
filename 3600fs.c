@@ -924,7 +924,113 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
                     struct fuse_file_info *fi)
 {
   fprintf(stderr, "\nIN vfs_read\n");
-  return 0;
+
+  file_loc loc = get_file(path);
+  // file does not exist
+  if (!loc.valid) {
+    return -1;
+  }
+
+  // TODO use a helper function to get inode block
+  char tmp_buf[BLOCKSIZE];
+  
+  // Get the inode
+  inode this_inode = get_inode(loc.inode_block.block, tmp_buf);
+  
+  // Number of db blocks in this inode
+  int current_blocks = (int) ceil((double) this_inode.size / BLOCKSIZE);
+
+  // Block in sequence we will read from first (index into all_blocks)
+  int starting_block = offset / BLOCKSIZE;
+  // offset to start at within that block
+  int local_offset = offset % BLOCKSIZE;
+  // amount to read from the first block
+  int first_block_read_size = BLOCKSIZE - local_offset;
+
+  // only read to the end of file
+  int amount_to_read = size;
+
+  // if we might read past the end of file, update amount_to_read
+  // to stop at the end of the file
+  if ((offset + size) > this_inode.size) {
+    amount_to_read = this_inode.size - offset;
+  } 
+
+  // if the offset is larger than the size of the inode, no read possible
+  if (offset >= this_inode.size) {
+    return 0;
+  }
+
+
+  // The list of blocks for this inode, in order
+  blocknum all_blocks[current_blocks];
+  
+  // Get a list of the blocks we already have...
+  // ******* WE NEED TO TALK ABOUT THIS LOGIC **********
+  // THESE MUST BE IN ORDER, NO GAPS IN DIRECT
+  // index into all_blocks
+  for (int i = 0; i < current_blocks; i++) {
+    if (this_inode.direct[i].valid) {
+      // add it to our list
+      all_blocks[i] = this_inode.direct[i];
+    }
+  }
+
+  // ****** LOGIC FOR READING********
+  // Iterate to the starting block
+  // read up to size
+  // stop at size
+  // number of characters read so far
+  int read = 0;
+
+  // Data Block we are reading from
+  db current_db = get_db(all_blocks[starting_block].block, tmp_buf);
+ 
+  for (read; read < first_block_read_size; read++) {
+    // we have read all the blocks we need to
+    if (read == amount_to_read) {
+      break;
+    }
+    // TODO: Error check here???
+    buf[read] = current_db.data[local_offset + read]; 
+  }
+  
+  // have we read everything
+  if (read == amount_to_read) {   
+    buf[read] = '\0'; 
+    return read;
+  }
+
+  // THIS SHOULD BE INSIDE BLOCKS
+  // Read until we are done...
+  // iterate through all_blocks, should break when we have 
+  for (int n = starting_block + 1; n < current_blocks ; n++) {
+    // if we have read all we need to, break
+    if (read == amount_to_read) {
+      break;
+    }  
+
+    // current db blocknum
+    unsigned int db_blocknum = all_blocks[n].block;
+    // Get the next db 
+    current_db = get_db(db_blocknum, tmp_buf);
+    
+    for (int m = 0; m < BLOCKSIZE; m++) {
+      // we have written all the blocks we need to
+      if (read == amount_to_read) {
+        break;
+      }
+      // TODO: ERROR HANDLING?
+      // capture the char
+      buf[read] = current_db.data[m]; 
+      // Increment read
+      read++;    
+    }  
+  }
+
+  buf[read] = '\0';
+
+  return amount_to_read;
 }
 
 /*
@@ -959,24 +1065,27 @@ static int vfs_write(const char *path, const char *buf, size_t size,
   inode this_inode = get_inode(loc.inode_block.block, tmp_buf);
   
   // calculate the extra bytes we need to write to the file
-  int needed_bytes = offset - this_inode.size + size;
+  int needed_bytes = offset + size;
   int current_blocks = (int) ceil((double) this_inode.size / BLOCKSIZE);
   int needed_blocks = (int) ceil((double) needed_bytes / BLOCKSIZE);
   // the additional number of blocks needed to write the data
+  
   int additional_blocks = needed_blocks - current_blocks;
 
   // the blocks we need to write to
-  blocknum blocks[additional_blocks];
+  blocknum blocks[abs(additional_blocks)];
+  if (additional_blocks > 0) {
 
-  // get the free blocks needed to write additional data
-  for (int i = 0; i < additional_blocks; i++) {
-    blocknum free_block = get_free();
-    // if we ran out of free blocks
-    if (!free_block.valid) {
-      release_free(blocks, i);
-      return -1;
+    // get the free blocks needed to write additional data
+    for (int i = 0; i < additional_blocks; i++) {
+      blocknum free_block = get_free();
+      // if we ran out of free blocks
+      if (!free_block.valid) {
+        release_free(blocks, i);
+        return -1;
+      }
+      blocks[i] = free_block;
     }
-    blocks[i] = free_block;
   }
 
   // The list of blocks for this inode, in order
@@ -984,10 +1093,10 @@ static int vfs_write(const char *path, const char *buf, size_t size,
   
   // Get a list of the blocks we already have...
   // ******* WE NEED TO TALK ABOUT THIS LOGIC **********
-    // THESE MUST BE IN ORDER, NO GAPS IN DIRECT
+  // THESE MUST BE IN ORDER, NO GAPS IN DIRECT
   // index into all_blocks
-  int i = 0;
-  for (i; i < current_blocks; i++) {
+  int i;
+  for (i = 0; i < current_blocks; i++) {
     if (this_inode.direct[i].valid) {
       // add it to our list
       all_blocks[i] = this_inode.direct[i];
@@ -995,21 +1104,23 @@ static int vfs_write(const char *path, const char *buf, size_t size,
   }
 
   // If we need to create more blocks to write, add them to our list
-  if (needed_blocks > 0) {
+  if (additional_blocks > 0) {
     // index into blocks list (ones we newly created)
     int j = 0;
     // Iterate through blocks, add them, capture locally list of all blocks
-    for (i; i < needed_blocks; i ++) {
+    for (i; i < needed_blocks; i++) {
       //add it to inode and all_blocks
       all_blocks[i] = blocks[j];
       // blocks[j] should be valid
       this_inode.direct[i] = blocks[j];
-      j++;  
+      db new_db;
+      write_db(blocks[j].block, tmp_buf, new_db);
+      j++;
     }
   }
 
 
-  // Block in sequence we will right to first (index into all_blocks)
+  // Block in sequence we will write to first (index into all_blocks)
   int starting_block = offset / BLOCKSIZE;
   // offset to start at within that block
   int local_offset = offset % BLOCKSIZE;
@@ -1051,15 +1162,14 @@ static int vfs_write(const char *path, const char *buf, size_t size,
     else {
       current_db.data[local_offset + written] = buf[written]; 
     } 
+
+    if (write_db(all_blocks[starting_block].block, tmp_buf, current_db)  == 0) {
+      // throw error
+    }
   }
   
   // have we written everything
   if (written == size) {
-    // write the db vlock
-    if (write_db(all_blocks[starting_block].block, tmp_buf, current_db)  == 0) {
-      // error writing
-    }
-    
     // update the inodes size
     this_inode.size += written;
     // write the inode
@@ -1077,7 +1187,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
     // current db blocknum
     unsigned int db_blocknum = all_blocks[n].block;
     // Get the next db 
-    current_db = get_db(tmp_buf, db_blocknum);
+    current_db = get_db(db_blocknum, tmp_buf);
     
     for (int m = 0; m < BLOCKSIZE; m++) {
       // we have written all the blocks we need to
@@ -1393,6 +1503,52 @@ static int vfs_truncate(const char *file, off_t offset)
   fprintf(stderr, "\nIN vfs_truncate\n");
   /* 3600: NOTE THAT ANY BLOCKS FREED BY THIS OPERATION SHOULD
            BE AVAILABLE FOR OTHER FILES TO USE. */
+  file_loc loc = get_file(file);
+  // file does not exist
+  if (!loc.valid) {
+    return -1;
+  }
+
+  // TODO use a helper function to get inode block
+  char tmp_buf[BLOCKSIZE];
+  
+  // Get the inode
+  inode this_inode = get_inode(loc.inode_block.block, tmp_buf);
+
+  // check if the offset exceeds the file size
+  if (this_inode.size - 1 < offset) {
+    return -1;
+  }
+
+  // the number of data blocks that this inode has 
+  int current_blocks = (int) ceil((double) this_inode.size / BLOCKSIZE);
+  // The list of blocks for this inode, in order
+  blocknum all_blocks[current_blocks];
+  
+  // Get a list of the blocks we already have...
+  int i;
+  for (i = 0; i < current_blocks; i++) {
+    if (this_inode.direct[i].valid) {
+      // add it to our list
+      all_blocks[i] = this_inode.direct[i];
+    }
+  }
+
+  // First block to free
+  int starting_block = (offset / BLOCKSIZE) + 1;
+  int blocks_to_delete = current_blocks - starting_block + 1;
+  // blocks need to be deleted
+  if (blocks_to_delete > 0) {
+    blocknum tmp_arr[blocks_to_delete];
+    for (int y = 0; y < blocks_to_delete; y++) {
+      tmp_arr[y] = all_blocks[starting_block + y];
+    }   
+    //release_free(tmp_arr, blocks_to_delete);
+  }
+
+  // update the size of the file
+  this_inode.size = offset;
+  write_inode(loc.inode_block.block, tmp_buf, this_inode);
 
   return 0;
 }
