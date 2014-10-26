@@ -1,0 +1,16 @@
+
+
+char data[512];
+offset = 200;
+bytes_to_write = 600;
+
+
+int diff = BLOCKSIZE - offset;
+
+bytes_to_write_to_this_data_block = (bytes_to_write < diff) ?
+    bytes_to_write : diff;
+
+
+strncpy(data+offset, buf, bytes_to_write_to_this_data_block);
+
+bytes_to_write -= BLOCKSIZE - offset;

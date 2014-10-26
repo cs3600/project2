@@ -565,9 +565,9 @@ vcb get_vcb(char *buf) {
   // Read Vcb
   dread(0, buf);
   // Put the read data into a Dnode struct
-  vcb thisVcb;
-  memcpy(&thisVcb, buf, sizeof(vcb));
-  return thisVcb;
+  vcb this_vcb;
+  memcpy(&this_vcb, buf, sizeof(vcb));
+  return this_vcb;
 }
 
 
@@ -654,11 +654,78 @@ dnode get_dnode(unsigned int b, char *buf) {
   memset(buf, 0, BLOCKSIZE);
   // Read Dnode
   dread(b, buf);
-  // Put the read data into a Dnode struct
-  dnode thisDnode;
-  memcpy(&thisDnode, buf, sizeof(dnode));
-  return thisDnode;
+  // Put the read data into a dnode struct
+  dnode this_dnode;
+  memcpy(&this_dnode, buf, sizeof(dnode));
+  return this_dnode;
 }
+
+// Write the given dnode (d) to disk at the given block (b)
+int write_dnode(unsigned int b, char *buf, dnode d) {
+  // Allocate appropriate memory 
+  memset(buf, 0, BLOCKSIZE);
+  // Put the dnode into the buf
+  memcpy(buf, &d, sizeof(dnode));
+  // Write dnode data, return 1 if successful
+  if (dwrite(b, buf) < 0) {
+    return 1;
+  }
+  // Error in write
+  return 0;
+}
+
+// Reads the inode at the given block number into buf
+inode get_inode(unsigned int b, char *buf) {
+  // Allocate appropriate memory 
+  memset(buf, 0, BLOCKSIZE);
+  // Read Dnode
+  dread(b, buf);
+  // Put the read data into a inode struct
+  inode this_inode;
+  memcpy(&this_inode, buf, sizeof(inode));
+  return this_inode;
+}
+
+// Write the given inode (i) to disk at the given block (b)
+int write_inode(unsigned int b, char *buf, inode i) {
+  // Allocate appropriate memory 
+  memset(buf, 0, BLOCKSIZE);
+  // Put the inode into the buf
+  memcpy(buf, &i, sizeof(inode));
+  // Write inode data, return 1 if successful
+  if (dwrite(b, buf) < 0) {
+    return 1;
+  }
+  // Error in write
+  return 0;
+}
+
+// Reads the db at the given block number into buf
+db get_db(unsigned int b, char *buf) {
+  // Allocate appropriate memory 
+  memset(buf, 0, BLOCKSIZE);
+  // Read Dnode
+  dread(b, buf);
+  // Put the read data into a db struct
+  db this_db;
+  memcpy(&this_db, buf, sizeof(db));
+  return this_db;
+}
+
+// Write the given db (d) to disk at the given block (b)
+int write_db(unsigned int b, char *buf, db d) {
+  // Allocate appropriate memory 
+  memset(buf, 0, BLOCKSIZE);
+  // Put the db into the buf
+  memcpy(buf, &d, sizeof(db));
+  // Write db data, return 1 if successful
+  if (dwrite(b, buf) < 0) {
+    return 1;
+  }
+  // Error in write
+  return 0;
+}
+
 
 // Returns the next free block's blocknum
 // If no more exist, returns a blocknum that is invalid
@@ -913,8 +980,136 @@ static int vfs_write(const char *path, const char *buf, size_t size,
     blocks[i] = free_block;
   }
 
+  // The list of blocks for this inode, in order
+  blocknum all_blocks[needed_blocks];
+  
+  // Get a list of the blocks we already have...
+  // ******* WE NEED TO TALK ABOUT THIS LOGIC **********
+    // THESE MUST BE IN ORDER, NO GAPS IN DIRECT
+  // index into all_blocks
+  int i = 0;
+  for (i; i < current_blocks; i++) {
+    if (this_inode.direct[i].valid) {
+      // add it to our list
+      all_blocks[i] = this_inode.direct[i];
+    }
+  }
 
-  return 0;
+  // If we need to create more blocks to write, add them to our list
+  if (needed_blocks > 0) {
+    // index into blocks list (ones we newly created)
+    int j = 0;
+    // Iterate through blocks, add them, capture locally list of all blocks
+    for (i; i < needed_blocks; i ++) {
+      //add it to inode and all_blocks
+      all_blocks[i] = blocks[j];
+      // blocks[j] should be valid
+      this_inode.direct[i] = blocks[j];
+      j++;  
+    }
+  }
+
+
+  // Block in sequence we will right to first (index into all_blocks)
+  int starting_block = offset / BLOCKSIZE;
+  // offset to start at within that block
+  int local_offset = offset % BLOCKSIZE;
+  // amount to write into the first block
+  int first_block_write_size = BLOCKSIZE - local_offset;
+
+// ****** LOGIC FOR WRITING********
+  // Iterate to the starting block
+  // write up to size
+  // stop at size
+  // number of bytes written so far
+  int written = 0;
+
+
+  // we have written everything we can from the buf
+  int buf_done = 0;
+
+  // Data Block we are now writing to
+  db current_db;
+  // ABSTRACT THIS
+  memset(tmp_buf, 0, BLOCKSIZE);
+  dread(all_blocks[starting_block].block, tmp_buf);
+  memcpy(&current_db, tmp_buf, sizeof(db));
+ 
+  for (written; written < first_block_write_size; written++) {
+    // we have written all the blocks we need to
+    if (written == size) {
+      break;
+    }
+    
+    // we have written everything we can from buf, but haven't
+    // reached size, put in 0's
+    if (buf_done) {
+      current_db.data[local_offset + written] = '0';
+    }
+    // We have reached the end of the buf
+    else if (buf[written] == '/0') {
+      // mark that there is no more data for us to read from buf
+      buf_done = 1;
+      current_db.data[local_offset + written] = '0';
+    }
+    // We have info to ge5t from buf, write it to the current_db
+    else {
+      current_db.data[local_offset + written] = buf[written]; 
+    } 
+  }
+  
+  if (written == size) {
+    // Write everything and return
+    // DB BLOCK WRITE, INODE BLOCK WRITE
+  }
+
+  // THIS SHOULD BE INSIDE BLOCKS
+  // Write until we are done...
+  // iterate through all_blocks, i is the size of all_blocks
+  for (int n = starting_block + 1; n < i; n++) {
+    // Get the next db 
+    memset(tmp_buf, 0, BLOCKSIZE);
+    dread(all_blocks[n].block, tmp_buf);
+    memcpy(&current_db, tmp_buf, sizeof(db));
+    
+    for (int m = 0; m < BLOCKSIZE; m++) {
+      // we have written all the blocks we need to
+      if (written == size) {
+        break;
+      }
+    
+      // we have written everything we can from buf, but haven't
+      // reached size, put in 0's
+      if (buf_done) {
+        current_db.data[m] = '0';
+      }
+      // We have reached the end of the buf
+      else if (buf[written] == '/0') {
+        // mark that there is no more data for us to read from buf
+        buf_done = 1;
+        current_db.data[m] = '0';
+      }
+      // We have info to ge5t from buf, write it to the current_db
+      else {
+        current_db.data[m] = buf[written]; 
+      }
+
+      // increment written to reflect writing
+      written++;    
+    }  
+    
+    // WRITE THAT SHIT... 
+    // DB BLOCK WRITE, INODE BLOCK WRITE
+  }
+
+  this_inode.size += size;
+  // WRITE THE INODE????
+  //  Don't forget to write newly created blocks and the direct...
+
+//********** UPDATE THE SIZE OF THE INODE TO REFLECT WRITE *************
+// RETURN AMOUNT WE WROTE...
+
+  return size;
 }
 
 

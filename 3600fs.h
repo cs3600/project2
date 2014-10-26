@@ -248,6 +248,22 @@ int create_inode_double_indirect_dirent(blocknum d, blocknum inode, const char *
 // Reads the dnode at the given block number into buf
 dnode get_dnode(unsigned int b, char *buf);
 
+// Write the given dnode (d) to disk at the given block (b)
+int write_dnode(unsigned int b, char *buf, dnode d);
+
+// Reads the inode at the given block number into buf
+inode get_inode(unsigned int b, char *buf);
+
+// Write the given inode (i) to disk at the given block (b)
+int write_inode(unsigned int b, char *buf, inode i);
+
+// Reads the db at the given block number into buf
+db get_db(unsigned int b, char *buf);
+
+// Write the given db (d) to disk at the given block (b)
+int write_db(unsigned int b, char *buf, db d);
+
+
 // Returns the next free block's blocknum
 // If no more exist, returns a blocknum that is invalid
 blocknum get_free();
