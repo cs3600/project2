@@ -954,10 +954,9 @@ static int vfs_write(const char *path, const char *buf, size_t size,
 
   // TODO use a helper function to get inode block
   char tmp_buf[BLOCKSIZE];
-  memset(tmp_buf, 0, BLOCKSIZE);
-  dread(loc.inode_block.block, tmp_buf);
-  inode this_inode;
-  memcpy(&this_inode, tmp_buf, sizeof(inode));
+  
+  // Get the inode
+  inode this_inode = get_inode(loc.inode_block.block, tmp_buf);
   
   // calculate the extra bytes we need to write to the file
   int needed_bytes = offset - this_inode.size + size;
@@ -1029,11 +1028,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
   int buf_done = 0;
 
   // Data Block we are now writing to
-  db current_db;
-  // ABSTRACT THIS
-  memset(tmp_buf, 0, BLOCKSIZE);
-  dread(all_blocks[starting_block].block, tmp_buf);
-  memcpy(&current_db, tmp_buf, sizeof(db));
+  db current_db = get_db(all_blocks[starting_block].block, tmp_buf);
  
   for (written; written < first_block_write_size; written++) {
     // we have written all the blocks we need to
@@ -1058,19 +1053,31 @@ static int vfs_write(const char *path, const char *buf, size_t size,
     } 
   }
   
+  // have we written everything
   if (written == size) {
-    // Write everything and return
-    // DB BLOCK WRITE, INODE BLOCK WRITE
+    // write the db vlock
+    if (write_db(all_blocks[starting_block].block, tmp_buf, current_db)  == 0) {
+      // error writing
+    }
+    
+    // update the inodes size
+    this_inode.size += written;
+    // write the inode
+    if (write_inode(loc.inode_block.block, tmp_buf, this_inode)  == 0) {
+      // error writing
+    }
+    
+    return written;
   }
 
   // THIS SHOULD BE INSIDE BLOCKS
   // Write until we are done...
   // iterate through all_blocks, i is the size of all_blocks
   for (int n = starting_block + 1; n < i; n++) {
+    // current db blocknum
+    unsigned int db_blocknum = all_blocks[n].block;
     // Get the next db 
-    memset(tmp_buf, 0, BLOCKSIZE);
-    dread(all_blocks[n].block, tmp_buf);
-    memcpy(&current_db, tmp_buf, sizeof(db));
+    current_db = get_db(tmp_buf, db_blocknum);
     
     for (int m = 0; m < BLOCKSIZE; m++) {
       // we have written all the blocks we need to
@@ -1099,12 +1106,16 @@ static int vfs_write(const char *path, const char *buf, size_t size,
     }  
     
     // WRITE THAT SHIT... 
-    // DB BLOCK WRITE, INODE BLOCK WRITE
+    if (write_db(db_blocknum, tmp_buf, current_db)  == 0) {
+      // error writing
+    }
   }
 
   this_inode.size += size;
-  // WRITE THE INODE????
-  //  Don't forget to write newly created blocks and the direct...
+  // write the inode
+  if (write_inode(loc.inode_block.block, tmp_buf, this_inode)  == 0) {
+    // error writing
+  }
 
 //********** UPDATE THE SIZE OF THE INODE TO REFLECT WRITE *************
 // RETURN AMOUNT WE WROTE...
