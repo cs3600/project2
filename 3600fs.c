@@ -936,7 +936,12 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
   
   // Get the inode
   inode this_inode = get_inode(loc.inode_block.block, tmp_buf);
-  
+
+  // if the offset is larger than the size of the inode, no read possible
+  if (offset >= this_inode.size) {
+    return -1;
+  }
+  //********************** ABSTRACT FROM HERE *********************
   // Number of db blocks in this inode
   int current_blocks = (int) ceil((double) this_inode.size / BLOCKSIZE);
 
@@ -956,81 +961,62 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
     amount_to_read = this_inode.size - offset;
   } 
 
-  // if the offset is larger than the size of the inode, no read possible
-  if (offset >= this_inode.size) {
-    return 0;
-  }
-
-
-  // The list of blocks for this inode, in order
+  // The list of db blocks for this inode, in order
   blocknum all_blocks[current_blocks];
   
-  // Get a list of the blocks we already have...
-  // ******* WE NEED TO TALK ABOUT THIS LOGIC **********
-  // THESE MUST BE IN ORDER, NO GAPS IN DIRECT
-  // index into all_blocks
+
+  // Get a list of the db blocks containing data for this inode
   for (int i = 0; i < current_blocks; i++) {
     if (this_inode.direct[i].valid) {
       // add it to our list
       all_blocks[i] = this_inode.direct[i];
     }
   }
-
+  
+  //********************** TO HERE *********************
   // ****** LOGIC FOR READING********
-  // Iterate to the starting block
-  // read up to size
-  // stop at size
-  // number of characters read so far
+  // characters read so far
   int read = 0;
 
   // Data Block we are reading from
   db current_db = get_db(all_blocks[starting_block].block, tmp_buf);
  
-  for (read; read < first_block_read_size; read++) {
-    // we have read all the blocks we need to
-    if (read == amount_to_read) {
-      break;
+  // If we will only read from the first block, do that and return
+  if (amount_to_read <= first_block_read_size) {
+    strncpy(buf, &current_db.data[local_offset], amount_to_read);
+    return amount_to_read;
+  }
+  // We will read from more than the first block, read it and decrement amount to read
+  else {
+    strncpy(buf, &current_db.data[local_offset], first_block_read_size);
+    amount_to_read -= first_block_read_size;  
+    read += first_block_read_size; 
+  }
+
+  // Read the rest
+  while (amount_to_read > 0) {
+    //increment starting_block, so we can get the next block
+    starting_block++;
+    // Get the correct db block
+    current_db = get_db(all_blocks[starting_block].block, tmp_buf);
+
+    // Last read, last block, only read amount_to_read
+    if (amount_to_read <= BLOCKSIZE) {
+      strncpy(&buf[read], current_db.data, amount_to_read); 
+      read += amount_to_read;
+      amount_to_read = 0;   
+      return read;
     }
-    // TODO: Error check here???
-    buf[read] = current_db.data[local_offset + read]; 
+    // We will be reading this whole block
+    else {
+      strncpy(&buf[read], current_db.data, BLOCKSIZE); 
+      amount_to_read -= BLOCKSIZE;  
+      read += BLOCKSIZE; 
+    }
   }
-  
-  // have we read everything
-  if (read == amount_to_read) {   
-    buf[read] = '\0'; 
-    return read;
-  }
+  // return how much we read
+  return read;
 
-  // THIS SHOULD BE INSIDE BLOCKS
-  // Read until we are done...
-  // iterate through all_blocks, should break when we have 
-  for (int n = starting_block + 1; n < current_blocks ; n++) {
-    // if we have read all we need to, break
-    if (read == amount_to_read) {
-      break;
-    }  
-
-    // current db blocknum
-    unsigned int db_blocknum = all_blocks[n].block;
-    // Get the next db 
-    current_db = get_db(db_blocknum, tmp_buf);
-    
-    for (int m = 0; m < BLOCKSIZE; m++) {
-      // we have written all the blocks we need to
-      if (read == amount_to_read) {
-        break;
-      }
-      // TODO: ERROR HANDLING?
-      // capture the char
-      buf[read] = current_db.data[m]; 
-      // Increment read
-      read++;    
-    }  
-  }
-
-  buf[read] = '\0';
-
-  return amount_to_read;
 }
 
 /*
