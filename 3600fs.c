@@ -1112,8 +1112,8 @@ static int vfs_write(const char *path, const char *buf, size_t size,
       //add it to inode and all_blocks
       all_blocks[i] = blocks[j];
       // blocks[j] should be valid
-      this_inode.direct[i] = blocks[j];
-      db new_db;
+      this_inode.direct[i] = blocks[j];  // TODO we don't need all blocks
+      db new_db;                         // we can do this with just direct
       write_db(blocks[j].block, tmp_buf, new_db);
       j++;
     }
@@ -1150,13 +1150,13 @@ static int vfs_write(const char *path, const char *buf, size_t size,
     // we have written everything we can from buf, but haven't
     // reached size, put in 0's
     if (buf_done) {
-      current_db.data[local_offset + written] = '0';
+      current_db.data[local_offset + written] = '/0';
     }
     // We have reached the end of the buf
     else if (buf[written] == '/0') {
       // mark that there is no more data for us to read from buf
       buf_done = 1;
-      current_db.data[local_offset + written] = '0';
+      current_db.data[local_offset + written] = '/0';
     }
     // We have info to ge5t from buf, write it to the current_db
     else {
@@ -1535,15 +1535,11 @@ static int vfs_truncate(const char *file, off_t offset)
   }
 
   // First block to free
-  int starting_block = (offset / BLOCKSIZE) + 1;
-  int blocks_to_delete = current_blocks - starting_block + 1;
+  int starting_block = (int) ceil((double) offset / BLOCKSIZE);
+  int blocks_to_delete = current_blocks - starting_block;
   // blocks need to be deleted
   if (blocks_to_delete > 0) {
-    blocknum tmp_arr[blocks_to_delete];
-    for (int y = 0; y < blocks_to_delete; y++) {
-      tmp_arr[y] = all_blocks[starting_block + y];
-    }   
-    //release_free(tmp_arr, blocks_to_delete);
+    release_free(&all_blocks[starting_block], blocks_to_delete);
   }
 
   // update the size of the file
