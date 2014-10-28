@@ -1014,6 +1014,8 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
       read += BLOCKSIZE; 
     }
   }
+
+  // TODO: Single and Double
   // return how much we read
   return read;
 
@@ -1068,6 +1070,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
       // if we ran out of free blocks
       if (!free_block.valid) {
         release_free(blocks, i);
+        // TODO: this shouild be a specific error, LOOK INTO IT
         return -1;
       }
       blocks[i] = free_block;
@@ -1099,6 +1102,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
       all_blocks[i] = blocks[j];
       // blocks[j] should be valid
       this_inode.direct[i] = blocks[j];  // TODO we don't need all blocks
+      // TODO: '0' This out... will cover the case where offset is larger than inode.size
       db new_db;                         // we can do this with just direct
       write_db(blocks[j].block, tmp_buf, new_db);
       j++;
@@ -1114,44 +1118,27 @@ static int vfs_write(const char *path, const char *buf, size_t size,
   int first_block_write_size = BLOCKSIZE - local_offset;
 
 // ****** LOGIC FOR WRITING********
-  // Iterate to the starting block
-  // write up to size
-  // stop at size
   // number of bytes written so far
   int written = 0;
-
-
-  // we have written everything we can from the buf
-  int buf_done = 0;
+  int to_write = size;
 
   // Data Block we are now writing to
   db current_db = get_db(all_blocks[starting_block].block, tmp_buf);
  
-  for (written; written < first_block_write_size; written++) {
-    // we have written all the blocks we need to
-    if (written == size) {
-      break;
-    }
-    
-    // we have written everything we can from buf, but haven't
-    // reached size, put in 0's
-    if (buf_done) {
-      current_db.data[local_offset + written] = '/0';
-    }
-    // We have reached the end of the buf
-    else if (buf[written] == '/0') {
-      // mark that there is no more data for us to read from buf
-      buf_done = 1;
-      current_db.data[local_offset + written] = '/0';
-    }
-    // We have info to ge5t from buf, write it to the current_db
-    else {
-      current_db.data[local_offset + written] = buf[written]; 
-    } 
-
-    if (write_db(all_blocks[starting_block].block, tmp_buf, current_db)  == 0) {
-      // throw error
-    }
+  // if the write will fit completely in the first block
+  if (to_write <= first_block_write_size) {
+    strncpy(&current_db.data[local_offset], buf, to_write);
+    written += to_write;
+  }
+  // Write what we can to the first block, update counters
+  else {
+    strncpy(&current_db.data[local_offset], buf, first_block_write_size);
+    written += first_block_write_size;
+    to_write -= first_block_write_size;
+  }
+  // write the db to disk  
+  if (write_db(all_blocks[starting_block].block, tmp_buf, current_db) == 0) {
+    // throw error
   }
   
   // have we written everything
@@ -1161,47 +1148,32 @@ static int vfs_write(const char *path, const char *buf, size_t size,
     // write the inode
     if (write_inode(loc.inode_block.block, tmp_buf, this_inode)  == 0) {
       // error writing
-    }
-    
+    }    
     return written;
   }
 
-  // THIS SHOULD BE INSIDE BLOCKS
-  // Write until we are done...
-  // iterate through all_blocks, i is the size of all_blocks
-  for (int n = starting_block + 1; n < i; n++) {
-    // current db blocknum
-    unsigned int db_blocknum = all_blocks[n].block;
-    // Get the next db 
+  // iterate through all_blocks, until we have written everything
+  
+  while (to_write > 0) {
+    // Get the next block
+    starting_block++;
+    unsigned int db_blocknum = all_blocks[starting_block].block;
     current_db = get_db(db_blocknum, tmp_buf);
-    
-    for (int m = 0; m < BLOCKSIZE; m++) {
-      // we have written all the blocks we need to
-      if (written == size) {
-        break;
-      }
-    
-      // we have written everything we can from buf, but haven't
-      // reached size, put in 0's
-      if (buf_done) {
-        current_db.data[m] = '0';
-      }
-      // We have reached the end of the buf
-      else if (buf[written] == '/0') {
-        // mark that there is no more data for us to read from buf
-        buf_done = 1;
-        current_db.data[m] = '0';
-      }
-      // We have info to ge5t from buf, write it to the current_db
-      else {
-        current_db.data[m] = buf[written]; 
-      }
 
-      // increment written to reflect writing
-      written++;    
-    }  
-    
-    // WRITE THAT SHIT... 
+    // if less than block size, only write to_write
+    if (to_write < BLOCKSIZE) {
+      strncpy(&current_db.data, &buf[written], to_write);
+      written += to_write;
+      to_write = 0;
+   }
+    // otherwise write BLOCKSIZE
+    else { 
+      strncpy(&current_db.data, &buf[written], BLOCKSIZE);
+      written += BLOCKSIZE;
+      to_write -= BLOCKSIZE;
+    }
+     
+    // write the block to disk
     if (write_db(db_blocknum, tmp_buf, current_db)  == 0) {
       // error writing
     }
@@ -1212,9 +1184,6 @@ static int vfs_write(const char *path, const char *buf, size_t size,
   if (write_inode(loc.inode_block.block, tmp_buf, this_inode)  == 0) {
     // error writing
   }
-
-//********** UPDATE THE SIZE OF THE INODE TO REFLECT WRITE *************
-// RETURN AMOUNT WE WROTE...
 
   return size;
 }
