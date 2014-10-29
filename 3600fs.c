@@ -76,11 +76,11 @@ static void* vfs_mount(struct fuse_conn_info *conn) {
 
   memcpy(&myVcb, tmp, sizeof(vcb));
 
-	// wrong file system
+	// wrong file system; disconnect
   if (myVcb.magic != MAGICNUMBER) {
-    fprintf(stdout, "Attempt to mount wrong filesystem!\n"); // TODO change this
-    // disconnect if its not our disk
-    dunconnect(); // TODO vfs_unmount?
+    fprintf(stdout, "Attempt to mount wrong filesystem!\n");
+    // disconnect
+    dunconnect();
 	}
     
   return NULL;
@@ -158,7 +158,6 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
   		dread(loc.inode_block.block, buf);
   		memcpy(&this_inode, buf, sizeof(inode));
 
-			// write the file??? TODO what is this BS? 
       stbuf->st_mode  = this_inode.mode | S_IFREG;
 
       // update stats
@@ -227,7 +226,7 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
   	return -1;
 	}
 
-	// TODO for multi-level directorie
+	// TODO for multi-level directories
   // TODO get the file_loc
   // check if it is a directory
   // otherwise throw a directory does not exist error
@@ -244,7 +243,8 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
   list_single(root_dnode.single_indirect, filler, buf);
   // list the double indirect entries of the dnode
   list_double(root_dnode.double_indirect, filler, buf);
-  return 0;
+
+	return 0;
 }
 
 // Returns the indirect at the specified blocknum
@@ -328,7 +328,6 @@ void list_entries(blocknum d[], size_t size, fuse_fill_dir_t filler, void *buf) 
   }
 }
 
-
 /*
  * Given an absolute path to a file (for example /a/b/myFile), vfs_create 
  * will create a new file named myFile in the /a/b directory.
@@ -338,7 +337,7 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 
   fprintf(stderr, "\nIN vfs_create\n");
 
-  // TODO path parsing? We should do this only if subdirs are implemented
+  // TODO multi-level path parsing
 
   // remove debugging statement TODO
   fprintf(stderr, "Creating file %s\n", path);
@@ -356,8 +355,6 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
   // See if the file exists
   if (loc.valid) {
     // File exists...
-          // TODO remove debug statement
-          fprintf(stderr, "The given file already exists.\n");
     return -EEXIST;
   }
     
@@ -400,33 +397,32 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 }
 
 // Initialize inode metadata to the given inode blocknum.
-// Returns 0 if there is block is not valid.
+// Returns 0 if the block b is not valid.
 int init_inode(blocknum b, char *buf, mode_t mode, struct fuse_file_info *fi) {
   // make sure the block is valid 
   if (b.valid) {
     // create new inode
     inode new_inode;
-    // the file has no data yet
+    // set file metadata
     new_inode.size = 0;
-    // TODO the file's user is the current user?
     new_inode.user = getuid();
-    // TODO the file's group is the current group?
     new_inode.group = getgid();
-
-    // set the file's mode
     new_inode.mode = mode;
-    // get the clock time and set access/modified/created
     clockid_t now = CLOCK_REALTIME;
     clock_gettime(now, &new_inode.access_time);
     clock_gettime(now, &new_inode.modify_time);
     clock_gettime(now, &new_inode.create_time);
-    // TODO what to do with direct?
-
+    // Invalidate all direct blocks 
+    blocknum invalid;
+    invalid.valid = 0;
+    invalid.block = 0;
+    for (int i = 0; i < NUM_DIRECT; i++) {
+    	new_inode.direct[i] = invalid;
+		}
     // invalidate the single and double indirects
     new_inode.single_indirect.valid = 0;
     new_inode.double_indirect.valid = 0;
-
-    // zero out the buffer and write inode to blocknum in our filesystem
+    // zero out the buffer and write inode to block b
     memset(buf, 0, BLOCKSIZE);
     memcpy(buf, &new_inode, sizeof(inode));
     dwrite(b.block,  buf);
@@ -476,7 +472,7 @@ int create_indirect(blocknum b, char *buf) {
   return 0;
 }
 
-// Create a file at the next open direntry in the given dirent
+// Link the inode to the next open direntry in the given dirent d
 // returns 0 if there are no open direntries
 int create_inode_dirent(blocknum d, blocknum inode, const char *path, char *buf) {
   // this must now be valid
@@ -490,16 +486,15 @@ int create_inode_dirent(blocknum d, blocknum inode, const char *path, char *buf)
     
   // look through each of the direntries
   for (int i = 0; i < NUM_DIRENTRIES; i++) {
-    // add the inode to the ith block that is not used yet
+    // add at the ith direntry
     if (!dir.entries[i].block.valid) {
-      // set the block that lives there to the passed in inode
+      // create a new direntry for the inode
       dir.entries[i].block = inode;
-      // set the name to the given path TODO: check length...
-      // TODO don't hardcode...
-      // TODO won't work for multi dir
-      strncpy(dir.entries[i].name, path+1, MAX_FILENAME_LEN); // TODO null term?
+      // TODO don't hardcode path+1; won't work for multi dir
+      strncpy(dir.entries[i].name, path+1, MAX_FILENAME_LEN - 1);
+      dir.entries[i].name[MAX_FILENAME_LEN - 1] = '/0';
       // set the type to a file
-      dir.entries[i].type = 0; // make constant TODO
+      dir.entries[i].type = 0;
 
       // write to dirent to disk
       memset(buf, 0, BLOCKSIZE);
