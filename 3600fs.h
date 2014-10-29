@@ -8,6 +8,7 @@
 #ifndef __3600FS_H__
 #define __3600FS_H__
 #include "disk.h"
+#include <fuse.h>
 
 // Constant number of pointers in direct[] inode and dnode
 #define NUM_DIRECT 110
@@ -268,9 +269,21 @@ int write_db(unsigned int b, char *buf, db d);
 // If no more exist, returns a blocknum that is invalid
 blocknum get_free();
 
-// Reads the vcb at the given block number into buf
+// Reads the vcb at into buf
 vcb get_vcb(char *buf);
 
+// Returns the indirect at the specified blocknum
+// Undefined behavior if b does not point to an indirect
+indirect get_indirect(blocknum b);
+
+// List entries in the given array of dirent blocknums
+void list_entries(blocknum d[], size_t size, fuse_fill_dir_t filler, void *buf);
+
+// list entries in the single indirect if there are any
+void list_single(blocknum s, fuse_fill_dir_t filler, void *buf); 
+
+// list entries in the double indirect if there are any
+void list_double(blocknum d, fuse_fill_dir_t filler, void *buf);
 
 // TODO: Multiple things have these structs.. can we abstract by passing a param???
 // Access Single_indirect

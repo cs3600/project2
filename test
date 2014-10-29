@@ -361,6 +361,7 @@ if (($atime == $mtime) && ($mtime == $ctime)) {
   endTest($FAIL, "Got times of $ctime/$atime/$mtime");
 }
 
+=cute
 startTest("Very large write/read", 5);
 $res = writeFile($FILE4, $vlgdata);
 if (length($res) > 0) {
@@ -375,6 +376,103 @@ if (length($res) > 0) {
     endTest($FAIL, "Returned data did not match (wrote length " . length($vlgdata) . ", read length " . length($cmp) . ").  Actual data are in /tmp/.actual and /tmp/.expected");
     open(F, "> /tmp/.actual"); print F $cmp; close(F);
     open(F, "> /tmp/.expected"); print F $vlgdata; close(F);
+  }
+}
+=cut
+
+stopFS();
+unlink($DISK);
+
+startSection("Additional stress tests");
+execute("$MKFS 100000");
+runFS();
+
+startTest("Creating 200 files", 5);
+my $done = 0;
+for (my $i=0; $i<200 && (! $done); $i++) {
+  $res = writeFile("$DIR/file$i", "");
+  if (length($res) > 0) {
+    endTest($FAIL, $res);
+    $done = 1;
+  }
+}
+if (! $done) {
+  endTest($PASS);
+}
+
+startTest("Reading directory with 200 files", 5);
+opendir(my $dh, $DIR);
+my @files = readdir($dh);
+closedir($dh);
+my $err = "";
+my @h = ();
+foreach my $f (@files) {
+  if ((! $done) && ($f =~ m|^file([0-9]+)$|)) { 
+    $h[$1] = 1;
+  } elsif (! ($f =~ m|^\.*$|)) {
+    $err .= "    Got unexpected file '$f'.\n";
+    $done = 1;
+  }
+}
+for (my $i=0; $i<200; $i++) {
+  if ((! $h[$i]) && (! $done)) { $err .= "    Could not find file 'file$i'.\n"; $done = 1; }
+}
+if ($done) {
+  endTest($FAIL, $err);
+} else {
+  endTest($PASS);
+}
+
+startTest("Creating 1000 more files", 5);
+my $done = 0;
+for (my $i=200; $i<1200 && (! $done); $i++) {
+  $res = writeFile("$DIR/file$i", "");
+  if (length($res) > 0) {
+    endTest($FAIL, $res);
+    $done = 1;
+  }
+}
+if (! $done) {
+  endTest($PASS);
+}
+
+startTest("Reading directory with 1200 files", 5);
+opendir(my $dh, $DIR);
+my @files = readdir($dh);
+closedir($dh);
+my $err = "";
+my @h = ();
+foreach my $f (@files) {
+  if ((! $done) && ($f =~ m|^file([0-9]+)$|)) { 
+    $h[$1] = 1;
+  } elsif (! ($f =~ m|^\.*$|)) {
+    $err .= "    Got unexpected file '$f'.\n";
+    $done = 1;
+  }
+}
+for (my $i=0; $i<1200; $i++) {
+  if ((! $h[$i]) && (! $done)) { $err .= "    Could not find file 'file$i'.\n"; $done = 1; }
+}
+if ($done) {
+  endTest($FAIL, $err);
+} else {
+  endTest($PASS);
+}
+
+startTest("Deleting 1200 files", 10);
+$done = 0;
+for (my $i=0; $i<1200 && (! $done); $i++) {
+  if (! -e "$DIR/file$i") {
+    endTest($FAIL, "File 'file$i' did not exist");
+    $done = 1;
+  } else {
+    deleteFile("$DIR/file$i");
+  }
+}
+for (my $i=0; $i<1200 && (! $done); $i++) {
+  if (-e "$DIR/file$i") {
+    endTest($FAIL, "File 'file$i' still existed after deletion");
+    $done = 1;
   }
 }
 

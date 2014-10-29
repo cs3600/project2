@@ -19,7 +19,6 @@
 #define _POSIX_C_SOURCE 199309
 
 #include <time.h>
-#include <fuse.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -45,6 +44,13 @@ const int MAGICNUMBER = 184901;
 const int NUM_DIRENTRIES = BLOCK_SIZE / sizeof(direntry);
 // Number of block in an indirect
 const int NUM_INDIRECT_BLOCKS = BLOCK_SIZE / sizeof(blocknum);
+
+// Cache size
+const int CACHE_SIZE = 1000;
+// Pointer to the next entry to write to in the cache
+int next_cache_entry = 0;
+// Cache of file_locs
+file_loc cache[];
 
 /*
  * Initialize filesystem. Read in file system metadata and initialize
@@ -170,9 +176,6 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 			return -ENOENT;
 		}
 	}
-
-	// Error when not root or root file?? TODO
-  return -1;
 }
 
 /*
@@ -223,14 +226,78 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
   if (strcmp("/", path) != 0) {
   	return -1;
 	}
-	// we know it's the root dir
+
+	// TODO for multi-level directorie
+  // TODO get the file_loc
+  // check if it is a directory
+  // otherwise throw a directory does not exist error
+  //
+  // file_loc should be updated to reflect file type
+
+  // we know it's the root dir
   char tmp_buf[BLOCKSIZE];
   dnode root_dnode = get_dnode(1, tmp_buf);
+  // list the direct entries of the dnode
+  list_entries(root_dnode.direct, NUM_DIRECT, filler, buf);
 
-  // iterate over all dirents in direct
-  for (int i = 0; i < NUM_DIRECT; i++) {
+  // list the single indirect entries
+  list_single(root_dnode.single_indirect, filler, buf);
+  // list the double indirect entries of the dnode
+  list_double(root_dnode.double_indirect, filler, buf);
+  return 0;
+}
+
+// Returns the indirect at the specified blocknum
+// Undefined behavior if b does not point to a valid indirect
+indirect get_indirect(blocknum b) {
+  	// zeroed out buf 
+  	char tmp_buf[BLOCKSIZE];
+  	memset(tmp_buf, 0, BLOCKSIZE);
+  	// read indirect from disk
+  	indirect i;
+  	dread(b.block, tmp_buf);
+  	memcpy(&i, tmp_buf, sizeof(indirect));
+
+  	return i;
+}
+
+// list entries in the double indirect if there are any
+void list_double(blocknum d, fuse_fill_dir_t filler, void *buf) {
+	// check that there are single indirect entries
+  if (d.valid) {
+  	// get the double indirect entries
+    indirect dub = get_indirect(d);
+    // list entries for each indirect entry
+    for (int j = 0; j < NUM_INDIRECT_BLOCKS; j++) {
+      // list the entries of the ith indirect if there is data there
+      if (dub.blocks[j].valid) {
+        indirect i = get_indirect(dub.blocks[j]);
+  	    list_entries(i.blocks, NUM_INDIRECT_BLOCKS, filler, buf);
+      }
+		}
+	}
+}
+
+// list entries in the single indirect if there are any
+void list_single(blocknum s, fuse_fill_dir_t filler, void *buf) {
+	// check that there are single indirect entries
+  if (s.valid) {
+  	// get the indirect
+    indirect i = get_indirect(s);
+  	// list the entries
+  	list_entries(i.blocks, NUM_INDIRECT_BLOCKS, filler, buf);
+	}
+}
+
+// List entries in the given array of dirent blocknums
+void list_entries(blocknum d[], size_t size, fuse_fill_dir_t filler, void *buf) {
+  // temporary buffer
+  char tmp_buf[BLOCKSIZE];
+
+  // iterate over all dirents in d
+  for (int i = 0; i < size; i++) {
   	// load dirent from disk into memory
-  	blocknum dirent_b = root_dnode.direct[i];
+  	blocknum dirent_b = d[i];
   	// read only valid dirents
   	if (dirent_b.valid) {
       dirent de;
@@ -259,10 +326,8 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
       }
     }
   }
-
-  // check single indirect and double indirect TODO
-  return 0;
 }
+
 
 /*
  * Given an absolute path to a file (for example /a/b/myFile), vfs_create 
