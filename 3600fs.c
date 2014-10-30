@@ -86,15 +86,19 @@ static int next_evict() {
 // Otherwise if there is no open cache entry, we evict the
 // entry located at the next_cache_entry.
 static void add_cache_entry(char *path, file_loc loc) {
+  // create a new path copy
+  int path_len = strlen(path) + 1;
+  char * new_path = (char *) malloc(path_len);
+  strncpy(new_path, path, path_len);
+
 	for (int i = 0; i < CACHE_SIZE; i++) {
-		// there is an open slot add a new cache entry there
+		// there is an open slot; add a new cache entry there
     if (cache[i]->open) {
-    	// create a new path
-    	int path_len = strlen(path) + 1;
-    	char * new_path = (char *) malloc(path_len);
-    	strncpy(new_path, path, path_len);
-    	// add to cache
+    	// free old path
+    	free(cache[i]->path);
+    	// add new path
       cache[i]->path = new_path;
+      // add loc; entry is now used
       cache[i]->loc = loc;
       cache[i]->open = 0;
     	return;
@@ -102,8 +106,26 @@ static void add_cache_entry(char *path, file_loc loc) {
 	}
 	// otherwise no open entry was found, replace the oldest
 	int oldest = next_evict();
-	cache[oldest]->path = path;
+	cache[oldest]->path = new_path;
 	cache[oldest]->loc = loc;
+}
+
+// Update the cache entry specified by the file from to
+// the file specified by to.
+static void update_cache_entry(char *from, char *to) {
+	for (int i = 0; i < CACHE_SIZE; i++) {
+		// we found the file from; change it to
+    if (!cache[i]->open && strcmp(cache[i]->path, from) == 0) {
+    	// free old path
+    	free(cache[i]->path);
+    	// add new path
+    	int path_len = strlen(to) + 1;
+    	char * new_path = (char *) malloc(path_len);
+    	strncpy(new_path, to, path_len);
+      cache[i]->path = new_path;
+    	return;
+		}
+	}
 }
 
 // Remove the given file from the cache if it exists
@@ -122,6 +144,7 @@ static void init_cache() {
   for (int i = 0; i < CACHE_SIZE; i++) {
   	// open cache entry
 	  cache_entry *ce = (cache_entry *) malloc(sizeof(cache_entry));
+	  ce->path = NULL;
 	  ce->open = 1;
 	  ce->ts = 0;
 	  // set each cache entry to open
@@ -1175,6 +1198,7 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
 
   buf[read] = '\0';
 
+	// udpate the access time TODO
   return amount_to_read;
 }
 
@@ -1505,6 +1529,8 @@ static int vfs_rename(const char *from, const char *to)
     memcpy(buf, &this_dirent, sizeof(dirent));
     dwrite(loc.dirent_block.block, buf);
 
+    // udpate the cache
+    update_cache_entry(from, to);
     return 0;
   }
   
