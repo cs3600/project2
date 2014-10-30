@@ -148,8 +148,8 @@ char junk[BLOCK_SIZE - sizeof(blocknum)];
 // For double_indirect file locations, the index of the indirect
 // in which the dirent was located is stored in addition to the
 // index of the dirent.
-typedef struct file_loc_t { // add file short name to file_loc??
-  // Is this a valid file location? TODO redundant? just check dirent_block.valid
+typedef struct file_loc_t {
+  // Is this a valid file location?
   unsigned int valid:1;
   // Is this file located in the direct dirents?
   unsigned int direct:1;
@@ -178,6 +178,18 @@ typedef struct file_loc_t { // add file short name to file_loc??
   // double_indirect.
   unsigned int indirect_idx;
 } file_loc;
+
+// Represents a cache entry.
+typedef struct cache_entry_t {
+	// is this entry open?
+	int open:1;
+	// path to a file
+	char *path;
+	// associated file_loc
+	file_loc loc;
+	// rough timestamp
+	unsigned long long ts;
+} cache_entry;
 
 // Returns the file_loc of the file specified by path.
 // If the file is not in the file system, then the function returns an 

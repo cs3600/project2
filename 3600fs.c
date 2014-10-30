@@ -30,6 +30,7 @@
 #include <assert.h>
 #include <sys/statfs.h>
 #include <sys/types.h>
+#include <limits.h>
 
 #ifdef HAVE_SETXATTR
 #include <sys/xattr.h>
@@ -38,6 +39,9 @@
 #include "3600fs.h"
 #include "disk.h"
 
+// Cache size; supports for at most 1000 entries 
+#define CACHE_SIZE 1000
+
 // Magic number to identify our disk
 const int MAGICNUMBER = 184901;
 // Number of direntries per dirent
@@ -45,12 +49,85 @@ const int NUM_DIRENTRIES = BLOCK_SIZE / sizeof(direntry);
 // Number of block in an indirect
 const int NUM_INDIRECT_BLOCKS = BLOCK_SIZE / sizeof(blocknum);
 
-// Cache size
-const int CACHE_SIZE = 1000;
-// Pointer to the next entry to write to in the cache
-int next_cache_entry = 0;
 // Cache of file_locs
-file_loc cache[];
+cache_entry *cache[CACHE_SIZE];
+
+// Get the file_loc specified by the given path
+// If the file_loc returned is invalid, then the file
+// is not in the cache.
+static file_loc get_cache_entry(char *path) {
+	// check each occupied cache entry for the path
+  for (int i = 0; i < CACHE_SIZE; i++) {
+    // cache hit
+    if (!cache[i]->open && strcmp(cache[i]->path, path) == 0) {
+      return cache[i]->loc;
+		}
+	}
+	// cache miss
+	file_loc loc;
+	loc.valid = 0;
+	return loc;
+}
+
+// Gets the next eviction entry (the oldest one).
+static int next_evict() {
+	long long oldest = ULLONG_MAX;
+  for (int i = 0; i < CACHE_SIZE; i++) {
+  	// update the oldest entry
+    if (oldest > cache[i]->ts) {
+    	oldest = cache[i]->ts;
+		}
+	}
+	return oldest;
+}
+
+// Add the given file to the cache with the given file_loc
+// If the file is already in cache, we replace that entry.
+// Otherwise if there is no open cache entry, we evict the
+// entry located at the next_cache_entry.
+static void add_cache_entry(char *path, file_loc loc) {
+	for (int i = 0; i < CACHE_SIZE; i++) {
+		// there is an open slot add a new cache entry there
+    if (cache[i]->open) {
+    	// create a new path
+    	int path_len = strlen(path) + 1;
+    	char * new_path = (char *) malloc(path_len);
+    	strncpy(new_path, path, path_len);
+    	// add to cache
+      cache[i]->path = new_path;
+      cache[i]->loc = loc;
+      cache[i]->open = 0;
+    	return;
+		}
+	}
+	// otherwise no open entry was found, replace the oldest
+	int oldest = next_evict();
+	cache[oldest]->path = path;
+	cache[oldest]->loc = loc;
+}
+
+// Remove the given file from the cache if it exists
+static void remove_cache_entry(char *path) {
+	for (int i = 0; i < CACHE_SIZE; i++) {
+		// mark an entry that is not open and contains the path as open 
+    if (!cache[i]->open && strcmp(cache[i]->path, path) == 0) {
+      cache[i]->open = 1;
+			return;
+		}
+	}
+}
+
+// Initialize the cache state. All entries are open.
+static void init_cache() {
+  for (int i = 0; i < CACHE_SIZE; i++) {
+  	// open cache entry
+	  cache_entry *ce = (cache_entry *) malloc(sizeof(cache_entry));
+	  ce->open = 1;
+	  ce->ts = 0;
+	  // set each cache entry to open
+    cache[i] = ce;
+	}
+}
 
 /*
  * Initialize filesystem. Read in file system metadata and initialize
@@ -82,7 +159,9 @@ static void* vfs_mount(struct fuse_conn_info *conn) {
     // disconnect
     dunconnect();
 	}
-    
+
+	// initialize the file_loc cache
+	init_cache();
   return NULL;
 }
 
@@ -369,7 +448,7 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 
     // Loop through dnode direct
     if (create_inode_direct_dirent(&thisDnode, this_inode, path, buf) == 1) {
-    	return 0;
+			return 0;
 		}
 
     // Loop through dnode -> single_indirect
@@ -517,7 +596,6 @@ int create_inode_direct_dirent(dnode *thisDnode, blocknum inode, const char *pat
   // Look for available direntry location to put this new file
   // Loop through dnode -> direct
   for (int i = 0; i < NUM_DIRECT; i++) {
-    // TODO: Abstract this to isValid...
     // check if valid, if not get one, assign to i, call function
     if (!(thisDnode->direct[i].valid)) {
       // create a dirent for the ith block
@@ -638,17 +716,21 @@ file_loc get_file(const char *path) {
   // Start at the Dnode and search the direct, single_indirect,
   // and double_indirect
 
-  // TODO create a cache of file_loc and do a cache check here
-  //
   // general-purpose temporary buffer
   char *buf = (char *) malloc(BLOCKSIZE);
+
+  // temporary file_loc buffer
+  file_loc loc; 
+  // check the cache for our file
+  loc = get_cache_entry(path);
+  if (loc.valid) {
+    fprintf(stderr, "Cache Hit: %s\n", path);
+    return loc;
+	}
 
   // Read data into a Dnode struct
   // TODO when implementing multi-directory, this will change
   dnode thisDnode = get_dnode(1, buf);
-
-  // temporary file_loc buffer
-  file_loc loc; 
 
 	// look at the right snippet of the path
 	char *file_path = path;
@@ -669,9 +751,10 @@ file_loc get_file(const char *path) {
 	// path exists in the filesystem.
 	loc = get_inode_direct_dirent(&thisDnode, buf, file_path);
 
-	// If valid return the value of the file_loc
+	// If valid return the value of the file_loc; update the cache
 	if (loc.valid) {
 		free(buf);
+		add_cache_entry(path, loc);
 		return loc;
 	}
 
@@ -679,26 +762,28 @@ file_loc get_file(const char *path) {
   // path exists in the filesystem.
   loc = get_inode_single_indirect_dirent(thisDnode.single_indirect, buf, file_path);
 
-	// If valid return the value of the file_loc
+	// If valid return the value of the file_loc; update the cache
   if (loc.valid) {
     free(buf);
     // set the direct, single_indirect, and double_indirect flags
     loc.direct = 0;
     loc.single_indirect = 1;
     loc.double_indirect = 0;
+		add_cache_entry(path, loc);
     return loc;
   }
 
 	// Check each dirent in each indirect in the double_indirect to see if the
   // file specified by path exists in the filesystem.
   loc = get_inode_double_indirect_dirent(thisDnode.double_indirect, buf, file_path);
-	// If valid return the value of the file_loc
+	// If valid return the value of the file_loc; update the cache
   if (loc.valid) {
     free(buf);
     // set the direct, single_indirect, and double_indirect flags
     loc.direct = 0;
     loc.single_indirect = 0;
     loc.double_indirect = 1;
+		add_cache_entry(path, loc);
     return loc;
   }
 
@@ -1340,6 +1425,9 @@ static int vfs_delete(const char *path)
   // If it is valid, get the dirent, and go to the direntry
   // for the given file
   if (loc.valid) {
+    // Update the cache
+    remove_cache_entry(path);
+
     // Get the dirent
     dirent file_dirent;
     memset(buf, 0, BLOCKSIZE);
