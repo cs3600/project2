@@ -181,12 +181,6 @@ typedef struct file_loc_t {
   unsigned int is_dir:1;
 } file_loc;
 
-// Associates a name to a directory location.
-typedef struct dir_loc_t {
-	blocknum block;
-	char name[MAX_FILENAME_LEN];
-} dir_loc;
-
 // Represents a cache entry.
 typedef struct cache_entry_t {
 	// is this entry open?
@@ -202,7 +196,8 @@ typedef struct cache_entry_t {
 // Returns the file_loc of the file specified by path.
 // If the file is not in the file system, then the function returns an 
 // invalid file_loc.
-file_loc get_file(char *path, dir_loc parent);
+// The cache uses abs_path for lookups.
+file_loc get_file(char *abs_path, char *path, file_loc parent);
 
 // Returns a file_loc to the file specified by path if it exists in the
 // dirent specified by blocknum b. If b is not valid, an invalid file_loc
@@ -246,25 +241,31 @@ int create_dirent(blocknum b, char *buf);
 
 // Create a file at the next open direntry in this dirent
 // returns 0 if there are no open direntries
-int create_inode_dirent(blocknum d, blocknum inode, const char *path, char *buf);
+// Returns 1 on success.
+// Returns -1 on error.
+// the passed in buf is meant as a reusable buf so we can save memory.
+int create_node_dirent(blocknum d, blocknum node, const char *name, unsigned int type, char *buf);
 
 // Create a file at the next open direntry in the given direct array.
 // Returns 0 if there is no space available for the new file in direct.
 // Returns 1 on success.
 // Returns -1 on error.
-int create_inode_direct_dirent(dnode *dnode, blocknum inode, const char *path, char *buf); 
+// the passed in buf is meant as a reusable buf so we can save memory.
+int create_node_direct_dirent(dnode *dnode, blocknum node, const char *name, unsigned int type, char *buf); 
 
 // Create a file at the next open direntry in this single_indirect
 // returns 0 if there are no open direntries
 // Returns 1 on success.
 // Returns -1 on error.
-int create_inode_single_indirect_dirent(blocknum s, blocknum inode, const char *path, char *buf);
+// the passed in buf is meant as a reusable buf so we can save memory.
+int create_node_single_indirect_dirent(blocknum s, blocknum node, const char *name, unsigned int type, char *buf);
 
 // Create a file at the next open direntry in this double_indirect
 // returns 0 if there are no open direntries
 // Returns 1 on success.
 // Returns -1 on error.
-int create_inode_double_indirect_dirent(blocknum d, blocknum inode, const char *path, char *buf);
+// the passed in buf is meant as a reusable buf so we can save memory.
+int create_node_double_indirect_dirent(blocknum d, blocknum node, const char *name, unsigned int type, char *buf);
 
 // Reads the dnode at the given block number into buf
 dnode get_dnode(unsigned int b, char *buf);
@@ -322,10 +323,11 @@ void release_blocks(blocknum blocks[], int size);
 // Redult is stored in blocks array with size size.
 void get_file_blocks(blocknum in, blocknum *blocks[], int *size);
 
-// Get the root dir_loc.
-dir_loc get_root_dir();
+// Get the root file_loc.
+file_loc get_root_dir();
 
-// get the directory specified by path in the parent directory
-file_loc get_dir(char *path, dir_loc parent);
+// Get the directory specified by path in the parent directory.
+// Abs path is the path used for cache lookups.
+file_loc get_dir(char *abs_path, char *path, file_loc parent);
 
 #endif

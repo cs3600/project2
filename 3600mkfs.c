@@ -203,8 +203,8 @@ int create_root_dirent() {
 
   // TODO: Where do these live?
   // type 1 refers to directory
-  direntry current = { .name = ".", .type = '1', .block = cur_block};   // "."
-  direntry parent = { .name = "..", .type = '1', .block = cur_block};   // ".."
+  direntry current = { .name = ".", .type = 1, .block = cur_block};   // "."
+  direntry parent = { .name = "..", .type = 1, .block = cur_block};   // ".."
 
   // invalidate direntries
   for (int i = 0; i < 16; i++) { // TODO WHY HARDCODED

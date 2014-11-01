@@ -361,6 +361,7 @@ if (($atime == $mtime) && ($mtime == $ctime)) {
   endTest($FAIL, "Got times of $ctime/$atime/$mtime");
 }
 
+=cut
 startTest("Very large write/read", 5);
 $res = writeFile($FILE4, $vlgdata);
 if (length($res) > 0) {
@@ -377,6 +378,7 @@ if (length($res) > 0) {
     open(F, "> /tmp/.expected"); print F $vlgdata; close(F);
   }
 }
+=cut
 
 stopFS();
 unlink($DISK);
