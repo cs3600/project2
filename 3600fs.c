@@ -842,8 +842,10 @@ int write_dnode(unsigned int b, char *buf, dnode d) {
   return 0;
 }
 
-// Reads the inode at the given block number into buf
-inode get_inode(unsigned int b, char *buf) {
+// Reads the inode at the given block number
+inode get_inode(unsigned int b) {
+	// temp buffer
+	char buf[BLOCKSIZE];
   // Allocate appropriate memory 
   memset(buf, 0, BLOCKSIZE);
   // Read Dnode
@@ -1103,7 +1105,7 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
   char tmp_buf[BLOCKSIZE];
   
   // Get the inode
-  inode this_inode = get_inode(loc.inode_block.block, tmp_buf);
+  inode this_inode = get_inode(loc.inode_block.block);
   
   // Number of db blocks in this inode
   int current_blocks = (int) ceil((double) this_inode.size / BLOCKSIZE);
@@ -1231,7 +1233,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
   char tmp_buf[BLOCKSIZE];
   
   // Get the inode
-  inode this_inode = get_inode(loc.inode_block.block, tmp_buf);
+  inode this_inode = get_inode(loc.inode_block.block);
   
   // calculate the extra bytes we need to write to the file
   int needed_bytes = offset + size;
@@ -1250,7 +1252,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
       blocknum free_block = get_free();
       // if we ran out of free blocks
       if (!free_block.valid) {
-        release_free(blocks, i);
+        release_blocks(blocks, i);
         return -1;
       }
       blocks[i] = free_block;
@@ -1404,7 +1406,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
 
 
 // Add the given list of blocks to our free block list
-void release_free(blocknum blocks[], int size) {
+void release_blocks(blocknum blocks[], int size) {
   // temp buffer
   char buf[BLOCKSIZE];
   // get the vcb to update the free blocks
@@ -1414,14 +1416,17 @@ void release_free(blocknum blocks[], int size) {
 
   // free all given blocks
   for (int i = 0; i < size; i++) {
-    free_b new_free;
-    new_free.next = tmp;
-    //  zero out buffer
-    memset(buf, 0, BLOCKSIZE);
-    memcpy(buf, &new_free, sizeof(free_b));
-    // write new free block to disk
-    dwrite(blocks[i].block, buf);
-    tmp = blocks[i];
+  	// ensure we only release valid blocks
+  	if (blocks[i].valid) {
+      free_b new_free;
+      new_free.next = tmp;
+      //  zero out buffer
+      memset(buf, 0, BLOCKSIZE);
+      memcpy(buf, &new_free, sizeof(free_b));
+      // write new free block to disk
+      dwrite(blocks[i].block, buf);
+      tmp = blocks[i];
+		}
   }
   // update the vcb free list head
   this_vcb.free = tmp;
@@ -1439,10 +1444,7 @@ void release_free(blocknum blocks[], int size) {
 static int vfs_delete(const char *path)
 {
   fprintf(stderr, "\nIN vfs_delete\n");
-	// check if the file exists
-	// free DB blocks, free INode, free Dnode/dirent --> double check this is how FUSE works
   char buf[BLOCKSIZE];
-
   // Get the file location of the given path 
   file_loc loc = get_file(path);
 
@@ -1465,27 +1467,74 @@ static int vfs_delete(const char *path)
     memcpy(buf, &file_dirent, sizeof(dirent));
     dwrite(loc.dirent_block.block, buf);
 
-    // This new free block's next will point to the 
-    // VCB's previous free block. This free block
-    // overwrites the inode block.
-    vcb this_vcb = get_vcb(buf);
-    free_b new_free;
-    new_free.next = this_vcb.free;
-    memset(buf, 0, BLOCKSIZE);
-    memcpy(buf, &new_free, sizeof(free_b));
-    dwrite(loc.inode_block.block, buf);
-
-    // Update VCB to point to the a new free block
-    // that is located where the file was previously located.
-    this_vcb.free = loc.inode_block;
-    memset(buf, 0, BLOCKSIZE);
-    memcpy(buf, &this_vcb, sizeof(vcb));
-    dwrite(0, buf);
+    // Get all the db block of the file inode and free them.
+    // Free the inode block as well.
+    int size;
+    blocknum *all_blocks;
+    get_file_blocks(loc.inode_block, &all_blocks, &size);
+    release_blocks(all_blocks, size);
   }
 
   return 0;
 }
 
+// Get all the blocks from an inode (all db blocks) and itself.
+// This implementation is not ideal. Could be made faster.
+// Redult is stored in blocks array with size size.
+void get_file_blocks(blocknum in, blocknum *blocks[], int *size) {
+  // Free the inode; free the inode's db blocks; free the inodes
+  inode this_inode = get_inode(in.block);
+
+	// all the blocks; direct + single + double (single^2) + this file block
+	int all_blocks_size = NUM_DIRECT + NUM_INDIRECT_BLOCKS + 
+		(NUM_INDIRECT_BLOCKS * NUM_INDIRECT_BLOCKS) + 1;
+	blocknum all_blocks[all_blocks_size];
+
+	// add the inode block
+	*size = 0;
+  all_blocks[*size] = in;
+  size++;
+
+	// add all valid blocknums from direct
+	for (int i = 0; i < NUM_DIRECT; i++) {
+		if (this_inode.direct[i].valid) {
+  	  all_blocks[*size] = this_inode.direct[i];
+  	  size++;
+		}
+	}
+
+	// add all valid blocknums from single_indirect.blocks if valid
+	if (this_inode.single_indirect.valid) {
+		// get the single indirect
+		indirect si = get_indirect(this_inode.single_indirect);
+  	for (int i = 0; i < NUM_INDIRECT_BLOCKS; i++) {
+  		if (si.blocks[i].valid) {
+			  all_blocks[*size] = si.blocks[i];
+  		  size++;
+			}
+	  }
+	}
+
+	// add all valid blocknums from double_indirect.blocks if valid
+	if (this_inode.double_indirect.valid) {
+		// get the double indirect
+		indirect di = get_indirect(this_inode.double_indirect);
+		// loop through each single indirect
+  	for (int i = 0; i < NUM_INDIRECT_BLOCKS; i++) {
+  		// get the ith single indirect
+  		if (di.blocks[i].valid) {
+  			indirect si = get_indirect(di.blocks[i]);
+    		// loop through the blocks of each single indirect
+    		for (int j = 0; j < NUM_INDIRECT_BLOCKS; j++) {
+    			if (si.blocks[i].valid) {
+  	  	    all_blocks[*size] = si.blocks[i];
+  		      size++;
+					}
+		  	}
+			}
+	  }
+	}
+}
 
 
 /*
@@ -1687,7 +1736,7 @@ static int vfs_truncate(const char *file, off_t offset)
   char tmp_buf[BLOCKSIZE];
   
   // Get the inode
-  inode this_inode = get_inode(loc.inode_block.block, tmp_buf);
+  inode this_inode = get_inode(loc.inode_block.block);
 
   // check if the offset exceeds the file size
   if (this_inode.size - 1 < offset) {
@@ -1713,7 +1762,7 @@ static int vfs_truncate(const char *file, off_t offset)
   int blocks_to_delete = current_blocks - starting_block;
   // blocks need to be deleted
   if (blocks_to_delete > 0) {
-    release_free(&all_blocks[starting_block], blocks_to_delete);
+    release_blocks(&all_blocks[starting_block], blocks_to_delete);
   }
 
   // update the size of the file

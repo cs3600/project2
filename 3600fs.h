@@ -265,7 +265,7 @@ dnode get_dnode(unsigned int b, char *buf);
 int write_dnode(unsigned int b, char *buf, dnode d);
 
 // Reads the inode at the given block number into buf
-inode get_inode(unsigned int b, char *buf);
+inode get_inode(unsigned int b);
 
 // Write the given inode (i) to disk at the given block (b)
 int write_inode(unsigned int b, char *buf, inode i);
@@ -297,13 +297,21 @@ void list_single(blocknum s, fuse_fill_dir_t filler, void *buf);
 // list entries in the double indirect if there are any
 void list_double(blocknum d, fuse_fill_dir_t filler, void *buf);
 
+// Get all the db blocknums from an inode
+void get_valid_blocknums(inode in, blocknum *blocks[], int *size);
+
 // TODO: Multiple things have these structs.. can we abstract by passing a param???
 // Access Single_indirect
 blocknum get_single_block(int loc);
 // Access Double_indirect
 blocknum get_double_block(int loc);
 
-// rename
-void release_free(blocknum blocks[], int size);
+// Add the given list of blocks to our free block list
+void release_blocks(blocknum blocks[], int size);
+
+// Get all the blocks from an inode (all db blocks) and itself.
+// This implementation is not ideal. Could be made faster.
+// Redult is stored in blocks array with size size.
+void get_file_blocks(blocknum in, blocknum *blocks[], int *size);
 
 #endif
