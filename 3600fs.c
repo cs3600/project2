@@ -272,12 +272,6 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 	}
 }
 
-// TODO 
-// TODO 
-// TODO 
-// TODO  declare in header not here
-
-
 /*
  * Given an absolute path to a directory (which may or may not end in
  * '/'), vfs_mkdir will create a new directory named dirname in that
@@ -288,7 +282,7 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
  */
 static int vfs_mkdir(const char *path, mode_t mode) {
 
-  fprintf(stderr, "\nIN vfs_create\n");
+  fprintf(stderr, "\nIN vfs_mkdir\n");
 
   // Allocate appropriate memory 
   char buf[BLOCKSIZE];
@@ -301,7 +295,7 @@ static int vfs_mkdir(const char *path, mode_t mode) {
 	file_loc root = get_root_dir();
   loc = get_dir(path, path, root);
 
-	name = get_name();
+//	name = get_name();
 
   // See if the file exists
   if (loc.valid) {
@@ -310,28 +304,28 @@ static int vfs_mkdir(const char *path, mode_t mode) {
   }
     
   // Get next free block
-  blocknum this_inode = get_free();
+  blocknum this_dnode = get_free();
     
   // Check that the free block is valid
-  if (this_inode.valid) {
+  if (this_dnode.valid) {
     // Set up Inode; if not 1, the inode was not set
-    if (init_inode(this_inode, buf, mode, fi) != 1)
+    if (create_dnode(this_dnode, buf, mode) != 1)
       return -1;
 
     // Loop through dnode direct
-    if (create_node_direct_dirent(&thisDnode, this_inode, path, 0, buf) == 1) {
+    if (create_node_direct_dirent(&thisDnode, this_dnode, path, 1, buf) == 1) {
 			return 0;
 		}
 
     // Loop through dnode -> single_indirect
-    if (create_node_single_indirect_dirent(thisDnode.single_indirect, this_inode, path, 0, buf) == 1) {
+    if (create_node_single_indirect_dirent(thisDnode.single_indirect, this_dnode, path, 1, buf) == 1) {
       memset(buf, 0, BLOCKSIZE);
       memcpy(buf, &thisDnode, sizeof(dnode));
       dwrite(1, buf);
       return 0;
     }
     // Loop through dnode -> double_indirect
-    else if (create_node_double_indirect_dirent(thisDnode.double_indirect, this_inode, path, 0, buf) == 1) {
+    else if (create_node_double_indirect_dirent(thisDnode.double_indirect, this_dnode, path, 1, buf) == 1) {
       memset(buf, 0, BLOCKSIZE);
       memcpy(buf, &thisDnode, sizeof(dnode));
       dwrite(1, buf);
@@ -374,28 +368,20 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 {
   fprintf(stderr, "\nIN vfs_readdir\n");
 
-  // TODO not for multi level
-  if (strcmp("/", path) != 0) {
-  	return -1;
-	}
-
-	// TODO for multi-level directories
-  // TODO get the file_loc
-  // check if it is a directory
-  // otherwise throw a directory does not exist error
-  //
-  // file_loc should be updated to reflect file type
+  // get the file_loc
+  file_loc root = get_root_dir();
+  file_loc loc = get_dir(path, path, root);
 
   // we know it's the root dir
   char tmp_buf[BLOCKSIZE];
-  dnode root_dnode = get_dnode(1, tmp_buf);
+  dnode this_dnode = get_dnode(loc.inode_block.block, tmp_buf);
   // list the direct entries of the dnode
-  list_entries(root_dnode.direct, NUM_DIRECT, filler, buf);
+  list_entries(this_dnode.direct, NUM_DIRECT, filler, buf);
 
   // list the single indirect entries
-  list_single(root_dnode.single_indirect, filler, buf);
+  list_single(this_dnode.single_indirect, filler, buf);
   // list the double indirect entries of the dnode
-  list_double(root_dnode.double_indirect, filler, buf);
+  list_double(this_dnode.double_indirect, filler, buf);
 
 	return 0;
 }
@@ -515,7 +501,7 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
   // Check that the free block is valid
   if (this_inode.valid) {
     // Set up Inode; if not 1, the inode was not set
-    if (init_inode(this_inode, buf, mode, fi) != 1)
+    if (create_inode(this_inode, buf, mode) != 1)
       return -1;
 
     // Loop through dnode direct
@@ -547,35 +533,71 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
   return -1;
 }
 
-// Initialize inode metadata to the given inode blocknum.
+// Initialize dnode metadata to the given dnode blocknum.
 // Returns 0 if the block b is not valid.
-int init_inode(blocknum b, char *buf, mode_t mode, struct fuse_file_info *fi) {
+// buf should be BLOCKSIZE bytes.
+int create_dnode(blocknum b, char *buf, mode_t mode) {
   // make sure the block is valid 
   if (b.valid) {
-    // create new inode
-    inode new_inode;
+    dnode new_node;
     // set file metadata
-    new_inode.size = 0;
-    new_inode.user = getuid();
-    new_inode.group = getgid();
-    new_inode.mode = mode;
+    new_node.size = 0;
+    new_node.user = getuid();
+    new_node.group = getgid();
+    new_node.mode = mode;
     clockid_t now = CLOCK_REALTIME;
-    clock_gettime(now, &new_inode.access_time);
-    clock_gettime(now, &new_inode.modify_time);
-    clock_gettime(now, &new_inode.create_time);
+    clock_gettime(now, &new_node.access_time);
+    clock_gettime(now, &new_node.modify_time);
+    clock_gettime(now, &new_node.create_time);
     // Invalidate all direct blocks 
     blocknum invalid;
     invalid.valid = 0;
     invalid.block = 0;
     for (int i = 0; i < NUM_DIRECT; i++) {
-    	new_inode.direct[i] = invalid;
+    	new_node.direct[i] = invalid;
 		}
     // invalidate the single and double indirects
-    new_inode.single_indirect.valid = 0;
-    new_inode.double_indirect.valid = 0;
+    new_node.single_indirect.valid = 0;
+    new_node.double_indirect.valid = 0;
     // zero out the buffer and write inode to block b
     memset(buf, 0, BLOCKSIZE);
-    memcpy(buf, &new_inode, sizeof(inode));
+    memcpy(buf, &new_node, sizeof(inode));
+    dwrite(b.block,  buf);
+    return 1;
+  }
+  // the block is not valid
+  return 0;
+}
+
+// Initialize inode metadata to the given inode blocknum.
+// Returns 0 if the block b is not valid.
+// buf should be BLOCKSIZE bytes.
+int create_inode(blocknum b, char *buf, mode_t mode) {
+  // make sure the block is valid 
+  if (b.valid) {
+    inode new_node;
+    // set file metadata
+    new_node.size = 0;
+    new_node.user = getuid();
+    new_node.group = getgid();
+    new_node.mode = mode;
+    clockid_t now = CLOCK_REALTIME;
+    clock_gettime(now, &new_node.access_time);
+    clock_gettime(now, &new_node.modify_time);
+    clock_gettime(now, &new_node.create_time);
+    // Invalidate all direct blocks 
+    blocknum invalid;
+    invalid.valid = 0;
+    invalid.block = 0;
+    for (int i = 0; i < NUM_DIRECT; i++) {
+    	new_node.direct[i] = invalid;
+		}
+    // invalidate the single and double indirects
+    new_node.single_indirect.valid = 0;
+    new_node.double_indirect.valid = 0;
+    // zero out the buffer and write inode to block b
+    memset(buf, 0, BLOCKSIZE);
+    memcpy(buf, &new_node, sizeof(inode));
     dwrite(b.block,  buf);
     return 1;
   }

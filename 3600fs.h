@@ -228,8 +228,15 @@ file_loc get_inode_single_indirect_dirent(blocknum b, char *buf, const char *pat
 // valid blocknum to another structure type is undefined.
 file_loc get_inode_double_indirect_dirent(blocknum b, char *buf, const char *path);
 
-// Initialize inode metadata to the given inode blocknum
-int init_inode(blocknum b, char *buf, mode_t mode, struct fuse_file_info *fi);
+// Initialize dnode metadata to the given dnode blocknum
+// Returns 0 if the block b is not valid.
+// buf should be BLOCKSIZE bytes.
+int create_dnode(blocknum b, char *buf, mode_t mode);
+
+// Initialize node metadata to the given node blocknum
+// Returns 0 if the block b is not valid.
+// buf should be BLOCKSIZE bytes.
+int create_inode(blocknum b, char *buf, mode_t mode);
 
 // Initialize the given blocknum to an indirect
 // returns 0 if there is an error in doing so
