@@ -177,7 +177,15 @@ typedef struct file_loc_t {
   // The index of the indirect where the dirent is located within the
   // double_indirect.
   unsigned int indirect_idx;
+  // Is this file a directory?
+  unsigned int is_dir:1;
 } file_loc;
+
+// Associates a name to a directory location.
+typedef struct dir_loc_t {
+	blocknum block;
+	char name[MAX_FILENAME_LEN];
+} dir_loc;
 
 // Represents a cache entry.
 typedef struct cache_entry_t {
@@ -194,7 +202,7 @@ typedef struct cache_entry_t {
 // Returns the file_loc of the file specified by path.
 // If the file is not in the file system, then the function returns an 
 // invalid file_loc.
-file_loc get_file(const char *path);
+file_loc get_file(char *path, dir_loc parent);
 
 // Returns a file_loc to the file specified by path if it exists in the
 // dirent specified by blocknum b. If b is not valid, an invalid file_loc
@@ -313,5 +321,11 @@ void release_blocks(blocknum blocks[], int size);
 // This implementation is not ideal. Could be made faster.
 // Redult is stored in blocks array with size size.
 void get_file_blocks(blocknum in, blocknum *blocks[], int *size);
+
+// Get the root dir_loc.
+dir_loc get_root_dir();
+
+// get the directory specified by path in the parent directory
+file_loc get_dir(char *path, dir_loc parent);
 
 #endif

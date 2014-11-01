@@ -361,7 +361,6 @@ if (($atime == $mtime) && ($mtime == $ctime)) {
   endTest($FAIL, "Got times of $ctime/$atime/$mtime");
 }
 
-=cute
 startTest("Very large write/read", 5);
 $res = writeFile($FILE4, $vlgdata);
 if (length($res) > 0) {
@@ -378,13 +377,12 @@ if (length($res) > 0) {
     open(F, "> /tmp/.expected"); print F $vlgdata; close(F);
   }
 }
-=cut
 
 stopFS();
 unlink($DISK);
 
 startSection("Additional stress tests");
-execute("$MKFS 100000");
+execute("$MKFS 10000");
 runFS();
 
 startTest("Creating 2000 files", 5);

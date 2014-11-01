@@ -250,7 +250,8 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
   else {
 
 		// get attr if exists
-  	file_loc loc = get_file(path);
+	  dir_loc root = get_root_dir();
+  	file_loc loc = get_file(path, root);
 
   	// not valid file
  	  if (loc.valid) {
@@ -287,14 +288,10 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
  * HINT: Don't forget to create . and .. while creating a
  * directory.
  */
-/*
- * NOTE: YOU CAN IGNORE THIS METHOD, UNLESS YOU ARE COMPLETING THE 
- *       EXTRA CREDIT PORTION OF THE PROJECT.  IF SO, YOU SHOULD
- *       UN-COMMENT THIS METHOD.
 static int vfs_mkdir(const char *path, mode_t mode) {
 
   return -1;
-} */
+}
 
 /** Read directory
  *
@@ -452,7 +449,8 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
   blocknum file;
   file_loc loc;
   // blocknum of Inode of file
-  loc = get_file(path);
+	dir_loc root = get_root_dir();
+  loc = get_file(path, root);
 
   // See if the file exists
   if (loc.valid) {
@@ -732,10 +730,10 @@ vcb get_vcb(char *buf) {
 }
 
 
-// Returns the file_loc of the given path's Inode.
+// Returns the file_loc of the given path's Inode form the parent.
 // If the file specified by the path does not have an associated Inode,
 // then the function returns an invalid file_loc.
-file_loc get_file(const char *path) {
+file_loc get_file(char *path, dir_loc parent) {
   // Start at the Dnode and search the direct, single_indirect,
   // and double_indirect
 
@@ -753,7 +751,7 @@ file_loc get_file(const char *path) {
 
   // Read data into a Dnode struct
   // TODO when implementing multi-directory, this will change
-  dnode thisDnode = get_dnode(1, buf);
+  dnode thisDnode = get_dnode(parent.block.block, buf);
 
 	// look at the right snippet of the path
 	char *file_path = path;
@@ -814,6 +812,58 @@ file_loc get_file(const char *path) {
   // Return invalid file_loc.
   free(buf);
   return loc;
+}
+
+// Get the root dir_loc.
+dir_loc get_root_dir() {
+	// the root block
+	blocknum b;
+	b.valid = 1;
+	b.block = 1;
+	// root dir_loc
+	dir_loc root;
+	root.block = b;
+	strncpy(root.name, "/", 2);
+	return root;
+}
+
+// get the directory specified by path in the parent directory
+file_loc get_dir(char *path, dir_loc parent) {
+	// a pointer to walk the string
+	char *p = path;
+
+	// remove leading /
+	if (*p == '/') {
+		p++;
+	}
+
+	// the start address of the first token
+	char *start = p;
+  // the length of a sub string delimited by /; '/0'
+	int child_len = 1;
+	// get the next token
+  while (*p != '/' && *p != '\0') {
+	  p++;
+	  child_len++;
+  }
+
+  // set the child path
+  char child_path[child_len];
+  strncpy(child_path, start, child_len);
+  child_path[child_len - 1] = '\0';
+
+  // check if the child exists
+  file_loc child_loc = get_file(child_path, parent);
+
+  // if the child is a file, return parent
+  if (!child_loc.is_dir) {
+  	return child_loc;
+	}
+	// if the child is a dir, recur
+  else {
+  	parent.block = child_loc.inode_block;
+  	return get_dir(p, parent);
+	}
 }
 
 // Reads the dnode at the given block number into buf
@@ -1095,7 +1145,8 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
 {
   fprintf(stderr, "\nIN vfs_read\n");
 
-  file_loc loc = get_file(path);
+	dir_loc root = get_root_dir();
+  file_loc loc = get_file(path, root);
   // file does not exist
   if (!loc.valid) {
     return -1;
@@ -1223,7 +1274,8 @@ static int vfs_write(const char *path, const char *buf, size_t size,
   /* 3600: NOTE THAT IF THE OFFSET+SIZE GOES OFF THE END OF THE FILE, YOU
            MAY HAVE TO EXTEND THE FILE (ALLOCATE MORE BLOCKS TO IT). */
 
-  file_loc loc = get_file(path);
+	dir_loc root = get_root_dir();
+  file_loc loc = get_file(path, root);
   // file does not exist
   if (!loc.valid) {
     return -1;
@@ -1446,7 +1498,8 @@ static int vfs_delete(const char *path)
   fprintf(stderr, "\nIN vfs_delete\n");
   char buf[BLOCKSIZE];
   // Get the file location of the given path 
-  file_loc loc = get_file(path);
+	dir_loc root = get_root_dir();
+  file_loc loc = get_file(path, root);
 
   // If it is valid, get the dirent, and go to the direntry
   // for the given file
@@ -1555,7 +1608,8 @@ static int vfs_rename(const char *from, const char *to)
   }
 
   // now get the file we are going to change
-  file_loc loc = get_file(from);
+	dir_loc root = get_root_dir();
+  file_loc loc = get_file(from, root);
 
   // If the file exists, change mode
   if (loc.valid) {
@@ -1605,7 +1659,8 @@ static int vfs_chmod(const char *file, mode_t mode)
 {
   fprintf(stderr, "\nIN vfs_chmod\n");
   // get_file -> reassign
-  file_loc loc = get_file(file);
+	dir_loc root = get_root_dir();
+  file_loc loc = get_file(file, root);
 
   // If the file exists, change mode
   if (loc.valid) {
@@ -1644,7 +1699,8 @@ static int vfs_chown(const char *file, uid_t uid, gid_t gid)
 {
   fprintf(stderr, "\nIN vfs_chown\n");
   // get file -> reassign
-  file_loc loc = get_file(file);
+	dir_loc root = get_root_dir();
+  file_loc loc = get_file(file, root);
 
    // If the file exists, change mode
   if (loc.valid) {
@@ -1685,7 +1741,8 @@ static int vfs_utimens(const char *file, const struct timespec ts[2])
   fprintf(stderr, "\nIN vfs_utimens\n");
 
   // Get the file/directory
-  file_loc loc = get_file(file);
+	dir_loc root = get_root_dir();
+  file_loc loc = get_file(file, root);
  
   // If the file exists, change mode
   if (loc.valid) {
@@ -1726,7 +1783,8 @@ static int vfs_truncate(const char *file, off_t offset)
   fprintf(stderr, "\nIN vfs_truncate\n");
   /* 3600: NOTE THAT ANY BLOCKS FREED BY THIS OPERATION SHOULD
            BE AVAILABLE FOR OTHER FILES TO USE. */
-  file_loc loc = get_file(file);
+	dir_loc root = get_root_dir();
+  file_loc loc = get_file(file, root);
   // file does not exist
   if (!loc.valid) {
     return -1;
@@ -1794,6 +1852,7 @@ static struct fuse_operations vfs_oper = {
   .chown    = vfs_chown,
   .utimens  = vfs_utimens,
   .truncate	= vfs_truncate,
+  .mkdir = vfs_mkdir,
 };
 
 int main(int argc, char *argv[]) {
