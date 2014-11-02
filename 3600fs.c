@@ -1504,6 +1504,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
     }
     // Write the changed doub
     write_indirect(this_inode.double_indirect.block, tmp_buf, doub);
+	}
   // If we need to create more blocks to write, add them to our list
   if (additional_blocks > 0) {
     // index into blocks list (ones we newly created)
