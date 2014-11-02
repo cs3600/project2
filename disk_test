@@ -1,15 +1,15 @@
 #!/bin/bash
 
-readonly TMPDIR=/tmp/cooooooooooooooooooool
+readonly TMPDIR=/tmp/bobby
 
 # unmount if tmpdir exists
-fusermount -u $TMPDIR
-rm -rf $TMPDIR 2> /dev/null
-mkdir $TMPDIR
+fusermount -zu $TMPDIR > /dev/null
+rm -rf $TMPDIR > /dev/null
+mkdir $TMPDIR > /dev/null
 
 # Create a disk and mount it to the given directory
 make clean; make
-./3600mkfs 1000
+./3600mkfs 100000
 
 if [[ $# -eq 1 && $1 == "-d" ]]; then
   gdb --args ./3600fs -s -d $TMPDIR
