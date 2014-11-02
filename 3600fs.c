@@ -1429,8 +1429,10 @@ static int vfs_write(const char *path, const char *buf, size_t size,
   blocknum all_blocks[needed_blocks];
    
   indirect sing = get_indirect2(this_inode.single_indirect.block, tmp_buf);
+  indirect doub = get_indirect2(this_inode.double_indirect.block, tmp_buf);
   int indirect_blocks = BLOCKSIZE/sizeof(blocknum);
 
+ 
   // Get a list of the blocks we already have...
   // ******* WE NEED TO TALK ABOUT THIS LOGIC **********
   // THESE MUST BE IN ORDER, NO GAPS IN DIRECT
@@ -1445,10 +1447,20 @@ static int vfs_write(const char *path, const char *buf, size_t size,
     else if ( i < NUM_DIRECT + indirect_blocks) {
       all_blocks[i] = sing.blocks[i - NUM_DIRECT];
     }
+    else {
+      int block_loc = i - NUM_DIRECT - indirect_blocks;
+      int s_loc = block_loc / indirect_blocks;
+      int loc_in_s = block_loc % indirect_blocks;
+      blocknum sing_blocknum = doub.blocks[s_loc];
+  
+      // REMOVE THE NESCESSITY TO READ EVERYTIME   
+      indirect new_sing = get_indirect2(sing_blocknum.block, tmp_buf);
+      all_blocks[i] = new_sing.blocks[loc_in_s];
+    }
   }
 
   // Make a single, write to disk
-  if (!this_inode.single_indirect.valid) {
+  if ((!this_inode.single_indirect.valid) && (needed_blocks > NUM_DIRECT)) {
     blocknum free_block = get_free();
     if (!free_block.valid) {
       release_blocks(blocks, additional_blocks);
@@ -1459,6 +1471,49 @@ static int vfs_write(const char *path, const char *buf, size_t size,
     this_inode.single_indirect = free_block;
     sing = new_sing;
   }
+
+  // Make a double, write to disk
+  if ((!this_inode.double_indirect.valid) && 
+    (needed_blocks > NUM_DIRECT + indirect_blocks)) {
+    blocknum free_block = get_free();
+    if (!free_block.valid) {
+      release_blocks(blocks, additional_blocks);
+      return -1;
+    }
+    indirect new_doub;
+    write_indirect(this_inode.double_indirect.block, tmp_buf, new_doub);
+    this_inode.single_indirect = free_block;
+    doub = new_doub;
+  }
+
+   // DETERMINE IF WE NEED TO MAKE SINGLE BLOCKS FOR DOUBLE
+  // ADD THEM
+  // WRITE IT
+  if ((needed_blocks >= NUM_DIRECT + indirect_blocks) && 
+    (additional_blocks > 0)) {
+    int block_loc = needed_blocks - NUM_DIRECT - indirect_blocks;
+    int s_loc = (int) ceil((double)block_loc / indirect_blocks);
+  
+    // Make sure each of the singles in the double is valid  
+    for (int y = 0; y < s_loc; y++) {
+      // if not valid, make one
+      if (!doub.blocks[y].valid) {
+        blocknum free_block = get_free();
+        // if we run out of free, return
+        if (!free_block.valid) {
+          release_blocks(blocks, additional_blocks);
+          return -1;
+        }  
+        // Create a new single, write to disk and assign to doub
+        indirect new_sing;
+        write_indirect(free_block.block, tmp_buf, new_sing);
+        doub.blocks[y] = free_block;
+      }
+    }
+    // Write the changed doub
+    write_indirect(this_inode.double_indirect.block, tmp_buf, doub);
+  } 
+
   // If we need to create more blocks to write, add them to our list
   if (additional_blocks > 0) {
     // index into blocks list (ones we newly created)
@@ -1477,6 +1532,18 @@ static int vfs_write(const char *path, const char *buf, size_t size,
       // Add to single
       else if (i < NUM_DIRECT + indirect_blocks) {
         sing.blocks[i - NUM_DIRECT] = blocks[j];
+      }
+      // Add to double
+      else {
+        int block_loc = i - NUM_DIRECT - indirect_blocks;
+        int s_loc = block_loc / indirect_blocks;
+        int loc_in_s = block_loc % indirect_blocks;
+        blocknum sing_blocknum = doub.blocks[s_loc];
+  
+        // REMOVE THE NESCESSITY TO READ EVERYTIME   
+        indirect new_sing = get_indirect2(sing_blocknum.block, tmp_buf);
+        new_sing.blocks[loc_in_s] = blocks[j];
+        write_indirect(sing_blocknum.block, tmp_buf, new_sing);      
       }
 
       // we can do this with just direct
