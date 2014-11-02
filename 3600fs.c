@@ -226,14 +226,14 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
   memset(buf, 0, BLOCKSIZE);
 
 	// get attr if exists
-  file_loc root = get_root_dir();
-  file_loc loc = get_dir(path, path, root);
+  file_loc parent = get_root_dir();
+  file_loc loc = get_dir(path, path, &parent);
 
 	// check if the file loc is a directory
   if (loc.valid && loc.is_dir) {
     
     // read in dnode
-		dnode this_dnode = get_dnode(loc.inode_block.block, buf);
+		dnode this_dnode = get_dnode(loc.node_block.block, buf);
 
     stbuf->st_mode  = this_dnode.mode | S_IFDIR;		
 
@@ -251,7 +251,7 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
   else if (loc.valid) {
 		// read in inode
   	inode this_inode; 
-  	dread(loc.inode_block.block, buf);
+  	dread(loc.node_block.block, buf);
   	memcpy(&this_inode, buf, sizeof(inode));
 
     stbuf->st_mode  = this_inode.mode | S_IFREG;
@@ -292,10 +292,8 @@ static int vfs_mkdir(const char *path, mode_t mode) {
   blocknum file;
   file_loc loc;
   // blocknum of Inode of file
-	file_loc root = get_root_dir();
-  loc = get_dir(path, path, root);
-
-//	name = get_name();
+	file_loc parent = get_root_dir();
+  loc = get_dir(path, path, &parent);
 
   // See if the file exists
   if (loc.valid) {
@@ -313,19 +311,19 @@ static int vfs_mkdir(const char *path, mode_t mode) {
       return -1;
 
     // Loop through dnode direct
-    if (create_node_direct_dirent(&thisDnode, this_dnode, path, 1, buf) == 1) {
+    if (create_node_direct_dirent(&thisDnode, this_dnode, loc.name, 1, buf) == 1) {
 			return 0;
 		}
 
     // Loop through dnode -> single_indirect
-    if (create_node_single_indirect_dirent(thisDnode.single_indirect, this_dnode, path, 1, buf) == 1) {
+    if (create_node_single_indirect_dirent(thisDnode.single_indirect, this_dnode, loc.name, 1, buf) == 1) {
       memset(buf, 0, BLOCKSIZE);
       memcpy(buf, &thisDnode, sizeof(dnode));
       dwrite(1, buf);
       return 0;
     }
     // Loop through dnode -> double_indirect
-    else if (create_node_double_indirect_dirent(thisDnode.double_indirect, this_dnode, path, 1, buf) == 1) {
+    else if (create_node_double_indirect_dirent(thisDnode.double_indirect, this_dnode, loc.name, 1, buf) == 1) {
       memset(buf, 0, BLOCKSIZE);
       memcpy(buf, &thisDnode, sizeof(dnode));
       dwrite(1, buf);
@@ -369,12 +367,12 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
   fprintf(stderr, "\nIN vfs_readdir\n");
 
   // get the file_loc
-  file_loc root = get_root_dir();
-  file_loc loc = get_dir(path, path, root);
+  file_loc parent = get_root_dir();
+  file_loc loc = get_dir(path, path, &parent);
 
   // we know it's the root dir
   char tmp_buf[BLOCKSIZE];
-  dnode this_dnode = get_dnode(loc.inode_block.block, tmp_buf);
+  dnode this_dnode = get_dnode(loc.node_block.block, tmp_buf);
   // list the direct entries of the dnode
   list_entries(this_dnode.direct, NUM_DIRECT, filler, buf);
 
@@ -478,16 +476,15 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 
   // Allocate appropriate memory 
   char buf[BLOCKSIZE];
-  // Get the dnode
-  dnode thisDnode = get_dnode(1, buf);
 
   blocknum file;
   file_loc loc;
   // blocknum of Inode of file
-	file_loc root = get_root_dir();
-  loc = get_dir(path, path, root);
+	file_loc parent = get_root_dir();
+  loc = get_dir(path, path, &parent);
 
-  // TODO create files with only their shortnames
+  // dnode where we want to write file to 
+  dnode thisDnode = get_dnode(parent.node_block.block, buf);
 
   // See if the file exists
   if (loc.valid) {
@@ -505,19 +502,19 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
       return -1;
 
     // Loop through dnode direct
-    if (create_node_direct_dirent(&thisDnode, this_inode, path, 0, buf) == 1) {
+    if (create_node_direct_dirent(&thisDnode, this_inode, loc.name, 0, buf) == 1) {
 			return 0;
 		}
 
     // Loop through dnode -> single_indirect
-    if (create_node_single_indirect_dirent(thisDnode.single_indirect, this_inode, path, 0, buf) == 1) {
+    if (create_node_single_indirect_dirent(thisDnode.single_indirect, this_inode, loc.name, 0, buf) == 1) {
       memset(buf, 0, BLOCKSIZE);
       memcpy(buf, &thisDnode, sizeof(dnode));
       dwrite(1, buf);
       return 0;
     }
     // Loop through dnode -> double_indirect
-    else if (create_node_double_indirect_dirent(thisDnode.double_indirect, this_inode, path, 0, buf) == 1) {
+    else if (create_node_double_indirect_dirent(thisDnode.double_indirect, this_inode, loc.name, 0, buf) == 1) {
       memset(buf, 0, BLOCKSIZE);
       memcpy(buf, &thisDnode, sizeof(dnode));
       dwrite(1, buf);
@@ -666,8 +663,8 @@ int create_node_dirent(blocknum d, blocknum node, const char *name, unsigned int
     if (!dir.entries[i].block.valid) {
       // create a new direntry for the inode
       dir.entries[i].block = node;
-      // TODO don't hardcode path+1; won't work for multi dir
-      strncpy(dir.entries[i].name, name+1, MAX_FILENAME_LEN - 1);
+      // add the name
+			strncpy(dir.entries[i].name, name, MAX_FILENAME_LEN - 1);
       dir.entries[i].name[MAX_FILENAME_LEN - 1] = '/0';
       // set the type to a file
       dir.entries[i].type = type;
@@ -824,34 +821,30 @@ file_loc get_file(char *abs_path, char *path, file_loc parent) {
   // temporary file_loc buffer
   file_loc loc; 
   // check the cache for our file
-  loc = get_cache_entry(path);
+  loc = get_cache_entry(abs_path);
   if (loc.valid) {
-    fprintf(stderr, "Cache Hit: %s\n", path);
+    fprintf(stderr, "Cache Hit: %s\n", abs_path);
     return loc;
 	}
 
   // Read data into a Dnode struct
   // TODO when implementing multi-directory, this will change
-  dnode thisDnode = get_dnode(parent.inode_block.block, buf);
+  dnode thisDnode = get_dnode(parent.node_block.block, buf);
 
 	// look at the right snippet of the path
 	char *file_path = path;
-	while (*file_path != '\0') {
-		// increment pointer until non '/' found; start of file name
-		if (*file_path == '/')
-			file_path++;
-		else 
-			break;
+	unsigned int name_len = 1;
+	while (*file_path != '\0' && *file_path != '/') {
+		name_len++;
+		file_path++;
 	}
-
-  // TODO with multi-directory, path must be parsed
-	// TODO make check_subdirs function that just checks that the 
-	// the dnodes contain the appropriate sub dnodes, then just check
-	// the file at the end as we do below
+	char name[name_len];
+	strncpy(name, path, name_len);
+	name[name_len - 1] = '\0';
 
 	// Check each dirent in direct to see if the file specified by
 	// path exists in the filesystem.
-	loc = get_inode_direct_dirent(&thisDnode, buf, file_path);
+	loc = get_inode_direct_dirent(&thisDnode, buf, name);
 
 	// If valid return the value of the file_loc; update the cache
 	if (loc.valid) {
@@ -862,7 +855,7 @@ file_loc get_file(char *abs_path, char *path, file_loc parent) {
 
   // Check each dirent in the single_indirect to see if the file specified by
   // path exists in the filesystem.
-  loc = get_inode_single_indirect_dirent(thisDnode.single_indirect, buf, file_path);
+  loc = get_inode_single_indirect_dirent(thisDnode.single_indirect, buf, name);
 
 	// If valid return the value of the file_loc; update the cache
   if (loc.valid) {
@@ -877,7 +870,7 @@ file_loc get_file(char *abs_path, char *path, file_loc parent) {
 
 	// Check each dirent in each indirect in the double_indirect to see if the
   // file specified by path exists in the filesystem.
-  loc = get_inode_double_indirect_dirent(thisDnode.double_indirect, buf, file_path);
+  loc = get_inode_double_indirect_dirent(thisDnode.double_indirect, buf, name);
 	// If valid return the value of the file_loc; update the cache
   if (loc.valid) {
     free(buf);
@@ -890,8 +883,9 @@ file_loc get_file(char *abs_path, char *path, file_loc parent) {
   }
 
   // The file specified by path does not exist in our file system.
-  // Return invalid file_loc.
+  // Return invalid file_loc with the short name.
   free(buf);
+  strncpy(loc.name, name, name_len);
   return loc;
 }
 
@@ -903,7 +897,7 @@ file_loc get_root_dir() {
 	b.block = 1;
 	// root file_loc
 	file_loc root;
-	root.inode_block = b;
+	root.node_block = b;
 	root.is_dir = 1;
 	root.valid = 1;
 	return root;
@@ -911,10 +905,10 @@ file_loc get_root_dir() {
 
 // get the directory specified by path in the parent directory.
 // The abs path is what the cache uses to perform lookups.
-file_loc get_dir(char *abs_path, char *path, file_loc parent) {
+file_loc get_dir(char *abs_path, char *path, file_loc *parent) {
 	// for the annoying case of when / is its own parent
 	if (strcmp(path, "/") == 0) {
-		return parent;
+		return *parent;
 	}
 
 	// a pointer to walk the string
@@ -941,7 +935,7 @@ file_loc get_dir(char *abs_path, char *path, file_loc parent) {
   child_path[child_len - 1] = '\0';
 
   // check if the child exists
-  file_loc child_loc = get_file(abs_path, child_path, parent);
+  file_loc child_loc = get_file(abs_path, child_path, *parent);
 
 	// file not found return the invalid file loc
   // if the child is a file return it
@@ -950,7 +944,7 @@ file_loc get_dir(char *abs_path, char *path, file_loc parent) {
 	}
 	// if the child is a dir, recur if there more
   else if (*p != '\0') {
-  	parent.inode_block = child_loc.inode_block;
+  	parent->node_block = child_loc.node_block;
   	return get_dir(abs_path, p, parent);
 	}
 	// otherwise return the directory file_loc
@@ -1098,9 +1092,10 @@ file_loc get_inode_dirent(blocknum b, char *buf, const char *path) {
         if (strcmp(path, tmp_dirent.entries[i].name) == 0) {
           loc.valid = 1;
           loc.dirent_block = b;
-          loc.inode_block = tmp_dirent.entries[i].block;
+          loc.node_block = tmp_dirent.entries[i].block;
           loc.direntry_idx = i;
           loc.is_dir = tmp_dirent.entries[i].type;
+          strncpy(loc.name, path, MAX_FILENAME_LEN);
           return loc;
         }
       }
@@ -1239,8 +1234,8 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
 {
   fprintf(stderr, "\nIN vfs_read\n");
 
-	file_loc root = get_root_dir();
-  file_loc loc = get_dir(path, path, root);
+	file_loc parent = get_root_dir();
+  file_loc loc = get_dir(path, path, &parent);
   // file does not exist
   if (!loc.valid) {
     return -1;
@@ -1250,7 +1245,7 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
   char tmp_buf[BLOCKSIZE];
   
   // Get the inode
-  inode this_inode = get_inode(loc.inode_block.block);
+  inode this_inode = get_inode(loc.node_block.block);
   
   // Number of db blocks in this inode
   int current_blocks = (int) ceil((double) this_inode.size / BLOCKSIZE);
@@ -1368,8 +1363,8 @@ static int vfs_write(const char *path, const char *buf, size_t size,
   /* 3600: NOTE THAT IF THE OFFSET+SIZE GOES OFF THE END OF THE FILE, YOU
            MAY HAVE TO EXTEND THE FILE (ALLOCATE MORE BLOCKS TO IT). */
 
-	file_loc root = get_root_dir();
-  file_loc loc = get_dir(path, path, root);
+	file_loc parent = get_root_dir();
+  file_loc loc = get_dir(path, path, &parent);
   // file does not exist
   if (!loc.valid) {
     return -1;
@@ -1379,7 +1374,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
   char tmp_buf[BLOCKSIZE];
   
   // Get the inode
-  inode this_inode = get_inode(loc.inode_block.block);
+  inode this_inode = get_inode(loc.node_block.block);
   
   // calculate the extra bytes we need to write to the file
   int needed_bytes = offset + size;
@@ -1490,7 +1485,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
     // update the inodes size
     this_inode.size += written;
     // write the inode
-    if (write_inode(loc.inode_block.block, tmp_buf, this_inode)  == 0) {
+    if (write_inode(loc.node_block.block, tmp_buf, this_inode)  == 0) {
       // error writing
     }
     
@@ -1540,7 +1535,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
 
   this_inode.size += size;
   // write the inode
-  if (write_inode(loc.inode_block.block, tmp_buf, this_inode)  == 0) {
+  if (write_inode(loc.node_block.block, tmp_buf, this_inode)  == 0) {
     // error writing
   }
 
@@ -1592,8 +1587,8 @@ static int vfs_delete(const char *path)
   fprintf(stderr, "\nIN vfs_delete\n");
   char buf[BLOCKSIZE];
   // Get the file location of the given path 
-	file_loc root = get_root_dir();
-  file_loc loc = get_dir(path, path, root);
+	file_loc parent = get_root_dir();
+  file_loc loc = get_dir(path, path, &parent);
 
   // If it is valid, get the dirent, and go to the direntry
   // for the given file
@@ -1618,7 +1613,7 @@ static int vfs_delete(const char *path)
     // Free the inode block as well.
     int size;
     blocknum *all_blocks;
-    get_file_blocks(loc.inode_block, &all_blocks, &size);
+    get_file_blocks(loc.node_block, &all_blocks, &size);
     release_blocks(all_blocks, size);
   }
 
@@ -1702,8 +1697,8 @@ static int vfs_rename(const char *from, const char *to)
   }
 
   // now get the file we are going to change
-	file_loc root = get_root_dir();
-  file_loc loc = get_dir(from, from, root);
+	file_loc parent = get_root_dir();
+  file_loc loc = get_dir(from, from, &parent);
 
   // If the file exists, change mode
   if (loc.valid) {
@@ -1753,8 +1748,8 @@ static int vfs_chmod(const char *file, mode_t mode)
 {
   fprintf(stderr, "\nIN vfs_chmod\n");
   // get_file -> reassign
-	file_loc root = get_root_dir();
-  file_loc loc = get_dir(file, file, root);
+	file_loc parent = get_root_dir();
+  file_loc loc = get_dir(file, file, &parent);
 
   // If the file exists, change mode
   if (loc.valid) {
@@ -1762,7 +1757,7 @@ static int vfs_chmod(const char *file, mode_t mode)
     // TODO: Should we abstarct this as well???
     inode this_inode;
     char buf[BLOCKSIZE];
-    dread(loc.inode_block.block, buf);
+    dread(loc.node_block.block, buf);
     memcpy(&this_inode, buf, sizeof(inode));
 
     // Change shit up
@@ -1770,7 +1765,7 @@ static int vfs_chmod(const char *file, mode_t mode)
 
     // Write modified one to disk
     memcpy(buf, &this_inode, sizeof(inode));
-    dwrite(loc.inode_block.block, buf);
+    dwrite(loc.node_block.block, buf);
 
     return 0;
   }
@@ -1793,17 +1788,16 @@ static int vfs_chown(const char *file, uid_t uid, gid_t gid)
 {
   fprintf(stderr, "\nIN vfs_chown\n");
   // get file -> reassign
-	file_loc root = get_root_dir();
-  file_loc loc = get_dir(file, file, root);
+	file_loc parent = get_root_dir();
+  file_loc loc = get_dir(file, file, &parent);
 
    // If the file exists, change mode
   if (loc.valid) {
     // Get the inode for the file
-    // TODO: Should we abstarct this as well???
     inode this_inode;
     char buf[BLOCKSIZE];
     
-    dread(loc.inode_block.block, buf);
+    dread(loc.node_block.block, buf);
     memcpy(&this_inode, buf, sizeof(inode));
 
     this_inode.user = uid;
@@ -1811,13 +1805,12 @@ static int vfs_chown(const char *file, uid_t uid, gid_t gid)
     
     // Write modified one to disk
     memcpy(buf, &this_inode, sizeof(inode));
-    dwrite(loc.inode_block.block, buf);
+    dwrite(loc.node_block.block, buf);
 
     return 0;
   }
   
   // No such file exists
-  // TODO: get this to work for directories
   else {
     return -1;
   }
@@ -1835,8 +1828,8 @@ static int vfs_utimens(const char *file, const struct timespec ts[2])
   fprintf(stderr, "\nIN vfs_utimens\n");
 
   // Get the file/directory
-	file_loc root = get_root_dir();
-  file_loc loc = get_dir(file, file, root);
+	file_loc parent = get_root_dir();
+  file_loc loc = get_dir(file, file, &parent);
  
   // If the file exists, change mode
   if (loc.valid) {
@@ -1844,7 +1837,7 @@ static int vfs_utimens(const char *file, const struct timespec ts[2])
     // TODO: Should we abstarct this as well???
     inode this_inode;
     char buf[BLOCKSIZE];
-    dread(loc.inode_block.block, buf);
+    dread(loc.node_block.block, buf);
     memcpy(&this_inode, buf, sizeof(inode));
 
     // Change shit up
@@ -1853,7 +1846,7 @@ static int vfs_utimens(const char *file, const struct timespec ts[2])
 
     // Write modified one to disk
     memcpy(buf, &this_inode, sizeof(inode));
-    dwrite(loc.inode_block.block, buf);
+    dwrite(loc.node_block.block, buf);
     return 0;
   }
   
@@ -1877,18 +1870,16 @@ static int vfs_truncate(const char *file, off_t offset)
   fprintf(stderr, "\nIN vfs_truncate\n");
   /* 3600: NOTE THAT ANY BLOCKS FREED BY THIS OPERATION SHOULD
            BE AVAILABLE FOR OTHER FILES TO USE. */
-	file_loc root = get_root_dir();
-  file_loc loc = get_dir(file, file, root);
+	file_loc parent = get_root_dir();
+  file_loc loc = get_dir(file, file, &parent);
   // file does not exist
   if (!loc.valid) {
     return -1;
   }
 
-  // TODO use a helper function to get inode block
   char tmp_buf[BLOCKSIZE];
-  
   // Get the inode
-  inode this_inode = get_inode(loc.inode_block.block);
+  inode this_inode = get_inode(loc.node_block.block);
 
   // check if the offset exceeds the file size
   if (this_inode.size - 1 < offset) {
@@ -1919,7 +1910,7 @@ static int vfs_truncate(const char *file, off_t offset)
 
   // update the size of the file
   this_inode.size = offset;
-  write_inode(loc.inode_block.block, tmp_buf, this_inode);
+  write_inode(loc.node_block.block, tmp_buf, this_inode);
 
   return 0;
 }

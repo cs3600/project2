@@ -149,6 +149,10 @@ char junk[BLOCK_SIZE - sizeof(blocknum)];
 // in which the dirent was located is stored in addition to the
 // index of the dirent.
 typedef struct file_loc_t {
+	// the short name of the file
+	char name[MAX_FILENAME_LEN];
+  // Is this file a directory?
+  unsigned int is_dir:1;
   // Is this a valid file location?
   unsigned int valid:1;
   // Is this file located in the direct dirents?
@@ -159,9 +163,9 @@ typedef struct file_loc_t {
   unsigned int double_indirect:1;
   // The dirent blocknum where the file is located
   blocknum dirent_block;
-  // The inode blocknum where the file is stored
-  blocknum inode_block;
-  // The index where the direntry for inode_block is located within 
+  // The node blocknum where the file is stored
+  blocknum node_block;
+  // The index where the direntry for node_block is located within 
   // dirent.entries.
   unsigned int direntry_idx;
   // The index where the dirent is located within in an array
@@ -177,8 +181,6 @@ typedef struct file_loc_t {
   // The index of the indirect where the dirent is located within the
   // double_indirect.
   unsigned int indirect_idx;
-  // Is this file a directory?
-  unsigned int is_dir:1;
 } file_loc;
 
 // Represents a cache entry.
@@ -335,6 +337,6 @@ file_loc get_root_dir();
 
 // Get the directory specified by path in the parent directory.
 // Abs path is the path used for cache lookups.
-file_loc get_dir(char *abs_path, char *path, file_loc parent);
+file_loc get_dir(char *abs_path, char *path, file_loc *parent);
 
 #endif
