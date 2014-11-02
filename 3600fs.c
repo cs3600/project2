@@ -1485,11 +1485,15 @@ static int vfs_write(const char *path, const char *buf, size_t size,
     (additional_blocks > 0)) {
     int block_loc = needed_blocks - NUM_DIRECT - indirect_blocks;
     int s_loc = (int) ceil((double)block_loc / indirect_blocks);
-  
+ 
+    int start = 0;
+    while (doub.blocks[start].valid) {
+      start++;
+    } 
     // Make sure each of the singles in the double is valid  
     for (int y = 0; y < s_loc; y++) {
       // if not valid, make one
-      if (!doub.blocks[y].valid) {
+      if (!doub.blocks[start].valid) {
         blocknum free_block = get_free();
         // if we run out of free, return
         if (!free_block.valid) {
@@ -1499,7 +1503,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
         // Create a new single, write to disk and assign to doub
         indirect new_sing;
         write_indirect(free_block.block, tmp_buf, new_sing);
-        doub.blocks[y] = free_block;
+        doub.blocks[start] = free_block;
       }
     }
     // Write the changed doub
