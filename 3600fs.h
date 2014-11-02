@@ -283,7 +283,7 @@ dnode get_dnode(unsigned int b, char *buf);
 int write_dnode(unsigned int b, char *buf, dnode d);
 
 // Reads the inode at the given block number into buf
-inode get_inode(unsigned int b);
+inode get_inode(unsigned int b, char *buf);
 
 // Write the given inode (i) to disk at the given block (b)
 int write_inode(unsigned int b, char *buf, inode i);

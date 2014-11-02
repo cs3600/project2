@@ -335,7 +335,7 @@ static int vfs_mkdir(const char *path, mode_t mode) {
     }
   }
 
-  // TODO: Out of memory message?
+  // Out of memory message?
   return -1;
 }
 
@@ -523,7 +523,6 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
     }
   }
 
-  // TODO: Out of memory message?
   return -1;
 }
 
@@ -825,7 +824,6 @@ file_loc get_file(char *abs_path, char *path, file_loc parent) {
 	}
 
   // Read data into a Dnode struct
-  // TODO when implementing multi-directory, this will change
   dnode thisDnode = get_dnode(parent.node_block.block, buf);
 
 	// look at the right snippet of the path
@@ -977,8 +975,7 @@ int write_dnode(unsigned int b, char *buf, dnode d) {
 }
 
 // Reads the inode at the given block number
-inode get_inode(unsigned int b) {
-  char buf[BLOCKSIZE];
+inode get_inode(unsigned int b, char *buf) {
   // Allocate appropriate memory 
   memset(buf, 0, BLOCKSIZE);
   // Read Dnode
@@ -990,6 +987,7 @@ inode get_inode(unsigned int b) {
 }
 
 // Write the given inode (i) to disk at the given block (b)
+// The passed in buf should be of size BLOCKSIZE
 int write_inode(unsigned int b, char *buf, inode i) {
   // Allocate appropriate memory 
   memset(buf, 0, BLOCKSIZE);
@@ -1004,6 +1002,7 @@ int write_inode(unsigned int b, char *buf, inode i) {
 }
 
 // Reads the db at the given block number into buf
+// The passed in buf should be of size BLOCKSIZE
 db get_db(unsigned int b, char *buf) {
   // Allocate appropriate memory 
   memset(buf, 0, BLOCKSIZE);
@@ -1016,6 +1015,7 @@ db get_db(unsigned int b, char *buf) {
 }
 
 // Write the given db (d) to disk at the given block (b)
+// The passed in buf should be of size BLOCKSIZE
 int write_db(unsigned int b, char *buf, db d) {
   // Allocate appropriate memory 
   memset(buf, 0, BLOCKSIZE);
@@ -1030,6 +1030,7 @@ int write_db(unsigned int b, char *buf, db d) {
 }
 
 // Reads the indirect at the given block number into buf
+// The passed in buf should be of size BLOCKSIZE
 indirect get_indirect2(unsigned int b, char *buf) {
   // Allocate appropriate memory 
   memset(buf, 0, BLOCKSIZE);
@@ -1042,6 +1043,7 @@ indirect get_indirect2(unsigned int b, char *buf) {
 }
 
 // Write the given indirect (i) to disk at the given block (b)
+// The passed in buf should be of size BLOCKSIZE
 int write_indirect(unsigned int b, char *buf, indirect i) {
   // Allocate appropriate memory 
   memset(buf, 0, BLOCKSIZE);
@@ -1095,6 +1097,7 @@ blocknum get_free() {
 // If b is valid, it is the caller's responsibility to ensure that b is a 
 // blocknum to a dirent. The behavior if b is a valid blocknum to another
 // structure type is undefined.
+// The passed in buf should be of size BLOCKSIZE
 file_loc get_inode_dirent(blocknum b, char *buf, const char *path) {
 
   // the file_loc to return
@@ -1132,6 +1135,7 @@ file_loc get_inode_dirent(blocknum b, char *buf, const char *path) {
 // Returns a file_loc to the file specified by path if it exists in the
 // any dirent within the thisDnode.direct array. If not found, an invalid
 // file_loc is returned.
+// The passed in buf should be of size BLOCKSIZE
 file_loc get_inode_direct_dirent(dnode *thisDnode, char *buf, const char *path) {
 
   // the file_loc to return
@@ -1165,6 +1169,7 @@ file_loc get_inode_direct_dirent(dnode *thisDnode, char *buf, const char *path) 
 // If b is valid, it is the caller's responsibility to ensure that b is a 
 // blocknum to an indirect of dirents. The behavior if b is a valid blocknum 
 // to another structure type is undefined.
+// The passed in buf should be of size BLOCKSIZE
 file_loc get_inode_single_indirect_dirent(blocknum b, char *buf, const char *path) {
 
   // the file_loc to return
@@ -1199,6 +1204,7 @@ file_loc get_inode_single_indirect_dirent(blocknum b, char *buf, const char *pat
 // If b is valid, it is the caller's responsibility to ensure that b is a 
 // blocknum to an indirect of indirects of dirents. The behavior if b is a 
 // valid blocknum to another structure type is undefined.
+// The passed in buf should be of size BLOCKSIZE
 file_loc get_inode_double_indirect_dirent(blocknum b, char *buf, const char *path) {
 
   // the file_loc to return
@@ -1227,18 +1233,6 @@ file_loc get_inode_double_indirect_dirent(blocknum b, char *buf, const char *pat
   return loc;
 }
 
-// TODO: Multiple things have these structs.. can we abstract by passing a param???
-// Access Single_indirect
-blocknum get_single_block(int loc) {
-  // mod by 128 for single index
-  // divide by 128 for index in direct
-}
-// Access Double_indirect
-blocknum get_double_block(int loc) {
-  // mod by 128 for index in double single index
-  // call get_single with loc/128
-}
-
 /*
  * The function vfs_read provides the ability to read data from 
  * an absolute path 'path,' which should specify an existing file.
@@ -1264,11 +1258,10 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
     return -1;
   }
 
-  // TODO use a helper function to get inode block
   char tmp_buf[BLOCKSIZE];
   
   // Get the inode
-  inode this_inode = get_inode(loc.node_block.block);
+  inode this_inode = get_inode(loc.node_block.block, tmp_buf);
 
   // if the offset is larger than the size of the inode, no read possible
   if (offset >= this_inode.size) {
@@ -1395,11 +1388,10 @@ static int vfs_write(const char *path, const char *buf, size_t size,
     return -1;
   }
 
-  // TODO use a helper function to get inode block
   char tmp_buf[BLOCKSIZE];
   
   // Get the inode
-  inode this_inode = get_inode(loc.node_block.block);
+  inode this_inode = get_inode(loc.node_block.block, tmp_buf);
   
   // calculate the extra bytes we need to write to the file
   int needed_bytes = offset + size;
@@ -1453,7 +1445,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
       int loc_in_s = block_loc % indirect_blocks;
       blocknum sing_blocknum = doub.blocks[s_loc];
   
-      // REMOVE THE NESCESSITY TO READ EVERYTIME   
+      // REMOVE THE NECESSITY TO READ EVERYTIME   
       indirect new_sing = get_indirect2(sing_blocknum.block, tmp_buf);
       all_blocks[i] = new_sing.blocks[loc_in_s];
     }
@@ -1712,7 +1704,8 @@ static int vfs_delete(const char *path)
 // Redult is stored in blocks array with size size.
 void get_file_blocks(blocknum in, blocknum *blocks[], int *size) {
   // Free the inode; free the inode's db blocks; free the inodes
-  inode this_inode = get_inode(in.block);
+  char tmp_buf[BLOCKSIZE];
+  inode this_inode = get_inode(in.block, tmp_buf);
 
 	// all the blocks; direct + single + double (single^2) + this file block
 	int all_blocks_size = NUM_DIRECT + NUM_INDIRECT_BLOCKS + 
@@ -1794,15 +1787,15 @@ static int vfs_rename(const char *from, const char *to)
     vfs_delete(to);
 
     // Get the dirent and adjust the name...
-    // TODO: Should we abstarct this as well???
     dirent this_dirent;
     char buf[BLOCKSIZE];
     dread(loc.dirent_block.block, buf);
     memcpy(&this_dirent, buf, sizeof(dirent));
 
+		parent = get_root_dir();
+    file_loc to_loc = get_dir(to, to, &parent);
     // Change the name at the proper direntry
-    // TODO: Change the +1
-    strncpy(this_dirent.entries[loc.direntry_idx].name, to+1, MAX_FILENAME_LEN);
+    strncpy(this_dirent.entries[loc.direntry_idx].name, to_loc.name, MAX_FILENAME_LEN);
 
     // Write modified one to disk
     memcpy(buf, &this_dirent, sizeof(dirent));
@@ -1814,7 +1807,6 @@ static int vfs_rename(const char *from, const char *to)
   }
   
   // No such file exists
-  // TODO: get this to work for directories
   else {
     return -1;
   }
@@ -1841,14 +1833,10 @@ static int vfs_chmod(const char *file, mode_t mode)
   // If the file exists, change mode
   if (loc.valid) {
     // Get the inode for the file
-    // TODO: Should we abstarct this as well???
-    inode this_inode;
     char buf[BLOCKSIZE];
-    dread(loc.node_block.block, buf);
-    memcpy(&this_inode, buf, sizeof(inode));
-
-    // Change shit up
-    this_inode.mode = (mode_t) mode;
+    inode this_inode = get_inode(loc.node_block.block, buf);
+    //update the mode
+		this_inode.mode = (mode_t) mode;
 
     // Write modified one to disk
     memcpy(buf, &this_inode, sizeof(inode));
@@ -1858,7 +1846,6 @@ static int vfs_chmod(const char *file, mode_t mode)
   }
   
   // No such file exists
-  // TODO: get this to work for directories
   else {
     return -1;
   }
@@ -1938,7 +1925,6 @@ static int vfs_utimens(const char *file, const struct timespec ts[2])
   }
   
   // No such file exists
-  // TODO: get this to work for directories
   else {
     return -1;
   }
@@ -1966,7 +1952,7 @@ static int vfs_truncate(const char *file, off_t offset)
 
   char tmp_buf[BLOCKSIZE];
   // Get the inode
-  inode this_inode = get_inode(loc.node_block.block);
+  inode this_inode = get_inode(loc.node_block.block, tmp_buf);
 
   // check if the offset exceeds the file size
   if (this_inode.size - 1 < offset) {

@@ -37,8 +37,88 @@ use Piazza to ask questions if you're stuck.
 
 
 ******************************************************************************
-Reasoning/Approach
+Disk Layout/Choice:
+
+We made an Inode file system; we chose this because it seemed like an 
+interesting challenge, and the professor mentioned it would be easier
+to implement recursive directories.
+
+
+High Level Approach:
+
+Abstract as much as possible and try to avoid writing repeat code.
+We made an awesome helper function called get_file and subsequently
+get_dir that abstracted much of the file navigation, and verification.
+
+We established a virtual structure for linking filenames with their where they
+were stored in their containing dnode structure. This structure proved to be
+critical in keeping us sane.
+
+A cache was created to improve lookups as well. So if we've already looked 
+something up we would be aware of it. Whenever a change is made to the on-disk
+structure we also reflect that change in the cache.
+
+We basically tried to follow the approach that was outlined in project 2.
+We used the data representations as they were provided in the Inode 
+Implementation Notes.
+
+Challenges:
+
+We faced a lot of challenges with debugging. So we made a script that made 
+debugging quicker. It's called disk_test. Supplying the -d flag runs the 
+fs with gdb. You can look into the bash code more if you are curious; 
+it's fairly simple.
+
+Logically most of the project made sense, it was more tedious and 
+time-consuming than we initially thought. There are pointers everywhere.
+
+The codebase is pretty large, and the chance of there being an error is 
+almost indefinite. Again, debugging was by far the biggest challenge.
+
+Getting multiple directories to work was surprisingly easy. Read and 
+Write were not bad, it was mostly the beginning of the project where we
+made all the abstractions that was the worst. Milestone 2 was where we
+faced most of the difficulty because we didn't know how FUSE worked.
+Getattr was greatly annoying because we had all our other code except
+for this working, but since FUSE almost always uses getattr in every
+other function call we didn't know what was actually working.
+Reading the project 2 notes helped here; up until this point we had
+forgotten to look at it.
+
+Worst bug: arguments to a memcpy call were swapped. This literally
+took forever to find. This also happened multiple times.
+
+Features:
+
+- Cache for quick lookups without going to disk
+- Code abstraction (though there is so much more that we could have done)
+- The code is fairly readable, though I will let you be the judge of that.
+- Multiple directories pass the given tests.
+
+Looking Back/Improvements:
+
+We had so much more we wanted to do, but our time management skills for
+the project were less than stellar to say the least.
+
+- Make changes only to the cache and only write to disk when the file
+  system is unmounted or if a cache entry is being overwritten. This
+  would have been huge!
+- A free block counter in our vcb could have improved performance because
+  we could easily figure out if we had enough space before doing a write
+  instead of writing, running out of disk space and rolling back.
+
+What's Missing:
+
+- Updating Access and Modification times when we read and write.
+
+Tests:
+
+We first approached testing with print statements. Ha.
+We switched to gdb, which was so much better ('target record' came in handy)
+We wrote a few additional stress tests. Unfortunately however, we did not
+get around to extensive testing.
+
+
 ******************************************************************************
-We will be making an Inode file system; we chose this because it seemed
-like an interesting challenge, and it says it would be easier to implement
-recursive directories.
+
+
