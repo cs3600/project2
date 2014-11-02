@@ -1307,7 +1307,7 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
       all_blocks[i] = this_inode.direct[i];
     } 
     // Case for single
-    else if ( i < NUM_DIRECT + indirect_blocks) {
+    else if ( i < (NUM_DIRECT + indirect_blocks)) {
       all_blocks[i] = sing.blocks[i - NUM_DIRECT];
     }
    // Case for double
@@ -1444,7 +1444,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
       all_blocks[i] = this_inode.direct[i];
     }
     // get from single
-    else if ( i < NUM_DIRECT + indirect_blocks) {
+    else if ( i < (NUM_DIRECT + indirect_blocks)) {
       all_blocks[i] = sing.blocks[i - NUM_DIRECT];
     }
     else {
@@ -1482,14 +1482,14 @@ static int vfs_write(const char *path, const char *buf, size_t size,
     }
     indirect new_doub;
     write_indirect(this_inode.double_indirect.block, tmp_buf, new_doub);
-    this_inode.single_indirect = free_block;
+    this_inode.double_indirect = free_block;
     doub = new_doub;
   }
 
    // DETERMINE IF WE NEED TO MAKE SINGLE BLOCKS FOR DOUBLE
   // ADD THEM
   // WRITE IT
-  if ((needed_blocks >= NUM_DIRECT + indirect_blocks) && 
+  if ((needed_blocks >= (NUM_DIRECT + indirect_blocks)) && 
     (additional_blocks > 0)) {
     int block_loc = needed_blocks - NUM_DIRECT - indirect_blocks;
     int s_loc = (int) ceil((double)block_loc / indirect_blocks);
@@ -1512,8 +1512,6 @@ static int vfs_write(const char *path, const char *buf, size_t size,
     }
     // Write the changed doub
     write_indirect(this_inode.double_indirect.block, tmp_buf, doub);
-  } 
-
   // If we need to create more blocks to write, add them to our list
   if (additional_blocks > 0) {
     // index into blocks list (ones we newly created)
@@ -1530,7 +1528,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
         this_inode.direct[i] = blocks[j];  // TODO we don't need all blocks
       }
       // Add to single
-      else if (i < NUM_DIRECT + indirect_blocks) {
+      else if (i < (NUM_DIRECT + indirect_blocks)) {
         sing.blocks[i - NUM_DIRECT] = blocks[j];
       }
       // Add to double
@@ -1662,7 +1660,6 @@ void release_blocks(blocknum blocks[], int size) {
   memcpy(buf, &this_vcb, sizeof(vcb));
   dwrite(0, buf);
 }
-
 
 
 /**
