@@ -1298,6 +1298,7 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
   blocknum all_blocks[current_blocks];
   
   indirect sing = get_indirect2(this_inode.single_indirect.block, tmp_buf);
+  indirect doub = get_indirect2(this_inode.double_indirect.block, tmp_buf);
   int indirect_blocks = BLOCKSIZE/sizeof(blocknum);
   // Get a list of the db blocks containing data for this inode
   for (int i = 0; i < current_blocks; i++) {
@@ -1309,6 +1310,17 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
     else if ( i < NUM_DIRECT + indirect_blocks) {
       all_blocks[i] = sing.blocks[i - NUM_DIRECT];
     }
+   // Case for double
+   else {
+     int block_loc = i - NUM_DIRECT - indirect_blocks;
+     int s_loc = block_loc / indirect_blocks;
+     int loc_in_s = block_loc % indirect_blocks;
+     blocknum sing_blocknum = doub.blocks[s_loc];
+  
+     // REMOVE THE NESCESSITY TO READ EVERYTIME   
+     indirect new_sing = get_indirect2(sing_blocknum.block, tmp_buf);
+     all_blocks[i] = new_sing.blocks[loc_in_s];
+   }
   }
   
   //********************** TO HERE *********************
@@ -1353,7 +1365,6 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
     }
   }
 
-  // TODO: Single and Double
   // return how much we read
   return read;
 }
