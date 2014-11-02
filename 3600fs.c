@@ -1459,7 +1459,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
       return -1;
     }
     indirect new_sing;
-    write_indirect(this_inode.single_indirect.block, tmp_buf, new_sing);
+    write_indirect(free_block.block, tmp_buf, new_sing);
     this_inode.single_indirect = free_block;
     sing = new_sing;
   }
@@ -1473,7 +1473,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
       return -1;
     }
     indirect new_doub;
-    write_indirect(this_inode.double_indirect.block, tmp_buf, new_doub);
+    write_indirect(free_block.block, tmp_buf, new_doub);
     this_inode.double_indirect = free_block;
     doub = new_doub;
   }
