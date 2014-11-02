@@ -1621,7 +1621,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
     }
   }
 
-  this_inode.size += size;
+  this_inode.size = needed_bytes;
   // write the inode
   if (write_inode(loc.node_block.block, tmp_buf, this_inode)  == 0) {
     // error writing
